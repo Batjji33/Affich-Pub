@@ -94,13 +94,20 @@
                             <div class="form-group mb-2">
                                 <label>Format de Diffusion</label>
                                 <div class="toggle-group">
-                                    <button type="button" class="toggle-btn active" data-value="manuel"
-                                        id="toggleManuel">
-                                        📄 Manuel
-                                    </button>
-                                    <button type="button" class="toggle-btn" data-value="informatique" id="toggleInfo">
-                                        💻 Informatique
-                                    </button>
+                                    <div class="toggle-item">
+                                        <button type="button" class="toggle-btn active" data-value="manuel"
+                                            id="toggleManuel">
+                                            📄 Manuel
+                                        </button>
+                                        <span class="view-note">livré sous 48h</span>
+                                    </div>
+                                    <div class="toggle-item">
+                                        <button type="button" class="toggle-btn" data-value="informatique"
+                                            id="toggleInfo">
+                                            💻 Informatique
+                                        </button>
+                                        <span class="view-note">livré sous 7j</span>
+                                    </div>
                                 </div>
                             </div>
                             <input type="hidden" id="format" name="format" value="manuel">
@@ -152,25 +159,37 @@
                                         <span class="radio-label">📅 Quotidien</span>
                                         <span class="radio-dot"></span>
                                     </div>
-                                    <div class="radio-option active" data-value="hebdomadaire">
-                                        <span class="radio-label">📆 Hebdomadaire</span>
-                                        <span class="radio-dot"></span>
-                                    </div>
-                                    <div class="radio-option" data-value="mensuel">
-                                        <span class="radio-label">📆 Mensuel</span>
+                                    <div class="radio-option active" data-value="bi-hebdomadaire">
+                                        <span class="radio-label">📆 Bi-hebdomadaire</span>
                                         <span class="radio-dot"></span>
                                     </div>
                                 </div>
                             </div>
-                            <input type="hidden" id="regularite" name="regularite" value="hebdomadaire">
+                            <input type="hidden" id="regularite" name="regularite" value="bi-hebdomadaire">
 
-                            <div class="form-group">
+                            <div class="form-group mb-2">
                                 <label for="emplacement">Emplacement</label>
                                 <select id="emplacement" name="emplacement">
-                                    <option value="zone1">Emplacement 1 — Zone Premium</option>
-                                    <option value="zone2">Emplacement 2 — Zone Standard</option>
-                                    <option value="zone3">Emplacement 3 — Zone Découverte</option>
+                                    <option value="premium">Zone Premium</option>
+                                    <option value="standard">Zone Standard</option>
+                                    <option value="decouverte">Zone Découverte</option>
                                 </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Durée de publication</label>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="dateDebut">Début</label>
+                                        <input type="date" id="dateDebut" name="dateDebut" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="dateFin">Fin</label>
+                                        <input type="date" id="dateFin" name="dateFin" required>
+                                    </div>
+                                </div>
+                                <span class="view-note">Max 7 jours</span>
+                                <span id="dateError" class="error-msg">La durée maximale est de 7 jours.</span>
                             </div>
                         </div>
                     </div>

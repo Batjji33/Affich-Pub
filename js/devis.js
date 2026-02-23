@@ -1,6 +1,6 @@
 /* ============================================
    DEVIS.JS — Quote generator logic
-   Form validation, toggles, file upload,
+   Form validation, toggles, persistence,
    AI simulation, copy/PDF
    ============================================ */
 
@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('devisForm');
     const generateBtn = document.getElementById('generateBtn');
     const resultSection = document.getElementById('devisResult');
+    const storageKey = 'devis_form_data';
 
     // ---------- Format toggle (Manuel / Informatique) ----------
     const toggleManuel = document.getElementById('toggleManuel');
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleInfo.classList.remove('active');
             btn.classList.add('active');
             formatInput.value = btn.dataset.value;
+            saveFormData();
         });
     });
 
@@ -34,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 regulariteGroup.querySelectorAll('.radio-option').forEach(o => o.classList.remove('active'));
                 option.classList.add('active');
                 regulariteInput.value = option.dataset.value;
+                saveFormData();
             });
         });
     }
@@ -45,10 +48,105 @@ document.addEventListener('DOMContentLoaded', () => {
     if (budgetRange && budgetValue) {
         budgetRange.addEventListener('input', () => {
             budgetValue.textContent = `${budgetRange.value} €`;
+            saveFormData();
         });
     }
 
+    // ---------- Persistence Logic ----------
+    function saveFormData() {
+        if (!form) return;
+        const formData = new FormData(form);
+        const data = {};
+        formData.forEach((value, key) => {
+            data[key] = value;
+        });
+        // Add active states for toggles and radios if not captured by FormData
+        data.activeFormat = formatInput.value;
+        data.activeRegularite = regulariteInput.value;
 
+        localStorage.setItem(storageKey, JSON.stringify(data));
+    }
+
+    function loadFormData() {
+        const savedData = localStorage.getItem(storageKey);
+        if (!savedData) return;
+
+        try {
+            const data = JSON.parse(savedData);
+
+            // Text inputs, selects, textareas
+            Object.keys(data).forEach(key => {
+                const field = form.elements[key];
+                if (field && field.type !== 'hidden') {
+                    field.value = data[key];
+                }
+            });
+
+            // Budget
+            if (data.budget && budgetRange && budgetValue) {
+                budgetRange.value = data.budget;
+                budgetValue.textContent = `${data.budget} €`;
+            }
+
+            // Format buttons
+            if (data.activeFormat) {
+                formatInput.value = data.activeFormat;
+                toggleManuel.classList.remove('active');
+                toggleInfo.classList.remove('active');
+                if (data.activeFormat === 'manuel') toggleManuel.classList.add('active');
+                else toggleInfo.classList.add('active');
+            }
+
+            // Regularity buttons
+            if (data.activeRegularite && regulariteGroup) {
+                regulariteInput.value = data.activeRegularite;
+                regulariteGroup.querySelectorAll('.radio-option').forEach(option => {
+                    option.classList.remove('active');
+                    if (option.dataset.value === data.activeRegularite) option.classList.add('active');
+                });
+            }
+        } catch (e) {
+            console.error("Error loading form data", e);
+        }
+    }
+
+    // Listen for changes on all form elements
+    if (form) {
+        form.querySelectorAll('input, textarea, select').forEach(element => {
+            element.addEventListener('change', saveFormData);
+            element.addEventListener('input', saveFormData);
+        });
+        loadFormData();
+    }
+
+    // ---------- Date Validation ----------
+    const dateDebut = document.getElementById('dateDebut');
+    const dateFin = document.getElementById('dateFin');
+    const dateError = document.getElementById('dateError');
+
+    function validateDates() {
+        if (!dateDebut.value || !dateFin.value) return true;
+
+        const start = new Date(dateDebut.value);
+        const end = new Date(dateFin.value);
+
+        const diffTime = end - start;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0 || diffDays > 7) {
+            dateError.style.display = 'block';
+            return false;
+        } else {
+            dateError.style.display = 'none';
+            return true;
+        }
+    }
+
+    [dateDebut, dateFin].forEach(input => {
+        if (input) {
+            input.addEventListener('change', validateDates);
+        }
+    });
 
     // ---------- Form validation ----------
     function validateForm() {
@@ -64,6 +162,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 group.classList.remove('has-error');
             }
         });
+
+        if (!validateDates()) {
+            isValid = false;
+        }
 
         // Live validation on input
         required.forEach(field => {
@@ -85,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!validateForm()) {
                 // Scroll to first error
-                const firstError = form.querySelector('.has-error');
+                const firstError = form.querySelector('.has-error') || dateError;
                 if (firstError) {
                     firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
@@ -109,6 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const regularite = document.getElementById('regularite').value;
             const emplacement = document.getElementById('emplacement');
             const emplacementText = emplacement.options[emplacement.selectedIndex].text;
+            const debut = document.getElementById('dateDebut').value;
+            const fin = document.getElementById('dateFin').value;
 
             // Populate result
             document.getElementById('resultNom').textContent = `${prenom} ${nom}`;
@@ -120,13 +224,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 `${emplacementText} • ${regularite.charAt(0).toUpperCase() + regularite.slice(1)}`;
             document.getElementById('resultObjet').textContent = objet;
             document.getElementById('resultDescription').textContent =
-                `Description : ${description}`;
+                `Description : ${description} (Du ${new Date(debut).toLocaleDateString()} au ${new Date(fin).toLocaleDateString()})`;
 
             // Generate smart recommendations based on inputs
             const recos = generateRecommendations(format, regularite, description);
             document.getElementById('resultRecos').textContent = recos;
-
-
 
             // Show result
             generateBtn.classList.remove('loading');
@@ -153,10 +255,8 @@ document.addEventListener('DOMContentLoaded', () => {
             recos.push('L\'utilisation de matériaux premium (papier couché, finition mate) est préconisée pour le support print.');
         }
 
-        if (regularite === 'hebdomadaire') {
-            recos.push('La fréquence hebdomadaire permet un renouvellement régulier du contenu tout en maintenant une cohérence visuelle forte.');
-        } else if (regularite === 'mensuel') {
-            recos.push('La fréquence mensuelle permet de concentrer le budget sur des créations plus impactantes et détaillées.');
+        if (regularite === 'bi-hebdomadaire') {
+            recos.push('La fréquence bi-hebdomadaire offre un excellent équilibre entre présence et budget, idéal pour maintenir un flux de communication constant.');
         }
 
         if (description.length > 100) {
@@ -231,3 +331,4 @@ ${recos}
     }
 
 });
+
