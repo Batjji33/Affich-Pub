@@ -21,6 +21,7 @@
   --text-muted: #666666;
   --danger: #ff4444;
   --success: #44ff44;
+  --warning: #ffaa00;
   --glass-bg: rgba(255, 255, 255, 0.03);
   --glass-bg-hover: rgba(255, 255, 255, 0.06);
   --glass-border: rgba(255, 255, 255, 0.06);
@@ -1628,6 +1629,11 @@ section {
 .hours-status .status-dot.closed {
   background: var(--danger);
   animation: none;
+}
+
+.hours-status .status-dot.warning {
+  background: var(--warning);
+  animation: pulse 1.5s infinite;
 }
 
 .hours-status .status-text {
