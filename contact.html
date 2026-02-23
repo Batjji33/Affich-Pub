@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nous Trouver — Affich'Pub</title>
+    <meta name="description"
+        content="Découvrez nos studios de création Affich'Pub à Paris et Lyon. Connectez-vous avec nos experts pour propulser votre visibilité.">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+</head>
+
+<body>
+
+    <!-- ===== NAVIGATION ===== -->
+    <nav class="navbar" id="navbar">
+        <div class="container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                        <path d="M12 2L2 22h20L12 2z" />
+                    </svg>
+                </span>
+                AFFICH'PUB
+            </a>
+            <div class="nav-links" id="navLinks">
+                <a href="index.html">Accueil</a>
+                <a href="devis.html">Mon Devis</a>
+                <a href="contact.html" class="active">Nous Trouver</a>
+
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ===== HERO ===== -->
+    <section class="contact-hero">
+        <div class="container">
+            <div class="location-badge">
+                📍 NOTRE AGENCE
+            </div>
+            <h1>Nous <span class="accent-text">Trouver</span></h1>
+            <p>Connectez-vous avec nos experts pour propulser votre visibilité depuis notre agence.</p>
+        </div>
+    </section>
+
+    <!-- ===== CONTACT CONTENT ===== -->
+    <section>
+        <div class="container">
+            <div class="contact-grid">
+
+                <!-- Left: Contact Info -->
+                <div class="glass-card contact-info-card animate-on-scroll">
+                    <div class="section-label">Contactez-nous</div>
+
+                    <div class="phone-label">Numéro de téléphone</div>
+                    <div class="phone-number">07 78 38 97 21</div>
+
+                    <div class="support-info" style="margin-bottom: 24px; border-color: rgba(255, 229, 0, 0.3);">
+                        <span class="info-icon">📱</span>
+                        <p>Merci de privilégier les <strong>SMS</strong> pour toute demande. Les appels sont strictement
+                            réservés aux <strong>urgences</strong>.</p>
+                    </div>
+
+                    <div class="addresses-label">Notre adresse</div>
+
+                    <div class="address-item">
+                        <div class="address-icon">📍</div>
+                        <div>
+                            <h4>Siège Principal</h4>
+                            <p>2, rue de la clairière<br>44240 La Chapelle-sur-Erdre, France</p>
+                            <a href="https://www.google.com/maps/search/?api=1&query=2+rue+de+la+clairière+la-chapelle-sur-erdre+44240"
+                                target="_blank" class="map-link">
+                                Voir sur la carte →
+                            </a>
+                        </div>
+                    </div>
+
+                    <a href="https://www.google.com/maps/search/?api=1&query=2+rue+de+la+clairière+la-chapelle-sur-erdre+44240"
+                        target="_blank" class="btn btn-primary itinerary-btn">
+                        🧭 Obtenir l'itinéraire
+                    </a>
+                </div>
+
+                <!-- Right: Hours -->
+                <div class="glass-card hours-card animate-on-scroll delay-1">
+                    <div class="section-label">Horaires d'ouverture</div>
+
+                    <div class="hours-status" id="hoursStatus">
+                        <div class="status-left">
+                            <span class="status-dot" id="statusDot"></span>
+                            <span class="status-text" id="statusText">ACTUELLEMENT OUVERT</span>
+                        </div>
+                        <span class="close-time" id="closeTime">Ferme à 18:00</span>
+                    </div>
+
+                    <!-- School period -->
+                    <div class="hours-period">
+                        <div class="period-title">
+                            🎓 Période scolaire
+                        </div>
+                        <div class="hours-row">
+                            <span>Lundi - Jeudi</span>
+                            <span class="time">18:00 - 19:00</span>
+                        </div>
+                        <div class="hours-row">
+                            <span>Vendredi</span>
+                            <span class="time closed">FERMÉ</span>
+                        </div>
+                        <div class="hours-row">
+                            <span>Samedi</span>
+                            <span class="time">11:00 - 12:00 / 14:00 - 18:00</span>
+                        </div>
+                        <div class="hours-row">
+                            <span>Dimanche</span>
+                            <span class="time">14:00 - 18:00</span>
+                        </div>
+                    </div>
+
+                    <!-- Vacation period -->
+                    <div class="hours-period">
+                        <div class="period-title">
+                            🎉 Vacances
+                        </div>
+                        <div class="hours-row">
+                            <span>Lundi</span>
+                            <span class="time">14:00 - 18:00</span>
+                        </div>
+                        <div class="hours-row">
+                            <span>Mardi - Jeudi</span>
+                            <span class="time">11:00 - 12:00 / 14:00 - 18:00</span>
+                        </div>
+                        <div class="hours-row">
+                            <span>Vendredi - Samedi</span>
+                            <span class="time">11:00 - 12:00 / 14:00 - 19:00</span>
+                        </div>
+                        <div class="hours-row">
+                            <span>Dimanche</span>
+                            <span class="time">14:00 - 18:00</span>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>© 2023 AFFICH'PUB. TOUS DROITS RÉSERVÉS.</p>
+                <div style="display:flex; gap:24px;">
+                    <a href="#" style="color: var(--text-muted); font-size: 0.8rem;">CONFIDENTIALITÉ</a>
+                    <a href="#" style="color: var(--text-muted); font-size: 0.8rem;">CONDITIONS</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+    <script src="js/contact.js"></script>
+</body>
+
+</html>

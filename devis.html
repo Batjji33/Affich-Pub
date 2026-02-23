@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon Devis — Affich'Pub</title>
+    <meta name="description"
+        content="Générez votre devis interactif avec Affich'Pub. Configurez votre campagne publicitaire et recevez une proposition stratégique détaillée.">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+</head>
+
+<body>
+
+    <!-- ===== NAVIGATION ===== -->
+    <nav class="navbar" id="navbar">
+        <div class="container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                        <path d="M12 2L2 22h20L12 2z" />
+                    </svg>
+                </span>
+                AFFICH'PUB
+            </a>
+            <div class="nav-links" id="navLinks">
+                <a href="index.html">Accueil</a>
+                <a href="devis.html" class="active">Mon Devis</a>
+                <a href="contact.html">Nous Trouver</a>
+
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ===== PAGE HEADER ===== -->
+    <section class="page-hero">
+        <div class="container">
+            <h1>Générateur de Devis <span class="accent-text">Interactif</span></h1>
+            <p>Configurez votre campagne publicitaire et recevez une proposition stratégique détaillée.</p>
+        </div>
+    </section>
+
+    <!-- ===== DEVIS FORM ===== -->
+    <section class="devis-form-section">
+        <div class="container">
+            <form id="devisForm" novalidate>
+                <div class="devis-grid">
+                    <!-- Left column -->
+                    <div>
+                        <!-- Personal Info -->
+                        <div class="form-card animate-on-scroll">
+                            <div class="form-card-title">
+                                <span class="card-icon">👤</span>
+                                Vos Informations
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="nom">Nom</label>
+                                    <input type="text" id="nom" name="nom" placeholder="Dupont" required>
+                                    <span class="error-msg">Le nom est requis</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="prenom">Prénom</label>
+                                    <input type="text" id="prenom" name="prenom" placeholder="Jean" required>
+                                    <span class="error-msg">Le prénom est requis</span>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="age">Âge</label>
+                                    <input type="number" id="age" name="age" placeholder="35" min="1" max="120">
+                                </div>
+                                <div class="form-group">
+                                    <label for="telephone">Téléphone</label>
+                                    <input type="tel" id="telephone" name="telephone" placeholder="06 12 34 56 78"
+                                        required>
+                                    <span class="error-msg">Le téléphone est requis</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Project Details -->
+                        <div class="form-card mt-3 animate-on-scroll delay-1">
+                            <div class="form-card-title">
+                                <span class="card-icon">📋</span>
+                                Détails du Projet
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Format de Diffusion</label>
+                                <div class="toggle-group">
+                                    <button type="button" class="toggle-btn active" data-value="manuel"
+                                        id="toggleManuel">
+                                        📄 Manuel
+                                    </button>
+                                    <button type="button" class="toggle-btn" data-value="informatique" id="toggleInfo">
+                                        💻 Informatique
+                                    </button>
+                                </div>
+                            </div>
+                            <input type="hidden" id="format" name="format" value="manuel">
+
+                            <div class="form-group mb-2">
+                                <label for="objet">Objet de la pub</label>
+                                <input type="text" id="objet" name="objet" placeholder="Ex: Lancement produit été"
+                                    required>
+                                <span class="error-msg">L'objet est requis</span>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label for="description">Description détaillée</label>
+                                <textarea id="description" name="description" placeholder="Décrivez votre besoin..."
+                                    rows="5" required></textarea>
+                                <span class="error-msg">La description est requise</span>
+                            </div>
+
+
+                        </div>
+                    </div>
+
+                    <!-- Right column -->
+                    <div>
+                        <!-- Parameters -->
+                        <div class="form-card animate-on-scroll delay-2">
+                            <div class="form-card-title">
+                                <span class="card-icon">⚙️</span>
+                                Paramètres
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Budget Estimatif</label>
+                                <div class="budget-container">
+                                    <div class="budget-value" id="budgetValue">1500 €</div>
+                                    <input type="range" id="budgetRange" name="budget" min="100" max="3000" step="100"
+                                        value="1500">
+                                    <div class="budget-labels">
+                                        <span>100 €</span>
+                                        <span>3000 €</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>Régularité d'entretien</label>
+                                <div class="radio-group" id="regulariteGroup">
+                                    <div class="radio-option" data-value="quotidien">
+                                        <span class="radio-label">📅 Quotidien</span>
+                                        <span class="radio-dot"></span>
+                                    </div>
+                                    <div class="radio-option active" data-value="hebdomadaire">
+                                        <span class="radio-label">📆 Hebdomadaire</span>
+                                        <span class="radio-dot"></span>
+                                    </div>
+                                    <div class="radio-option" data-value="mensuel">
+                                        <span class="radio-label">📆 Mensuel</span>
+                                        <span class="radio-dot"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="hidden" id="regularite" name="regularite" value="hebdomadaire">
+
+                            <div class="form-group">
+                                <label for="emplacement">Emplacement</label>
+                                <select id="emplacement" name="emplacement">
+                                    <option value="zone1">Emplacement 1 — Zone Premium</option>
+                                    <option value="zone2">Emplacement 2 — Zone Standard</option>
+                                    <option value="zone3">Emplacement 3 — Zone Découverte</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Generate button -->
+                <div class="generate-btn-wrap animate-on-scroll">
+                    <button type="submit" class="btn btn-primary generate-btn" id="generateBtn">
+                        <span class="btn-text">✏️ Générer mon devis</span>
+                        <span class="spinner"></span>
+                    </button>
+                    <p class="generate-note">Document formaté • Proposition détaillée sans prix</p>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <!-- ===== DEVIS RESULT ===== -->
+    <section class="devis-result" id="devisResult">
+        <div class="container">
+            <div class="result-card">
+                <div class="result-header">
+                    <span style="font-size:1.5rem">📄</span>
+                    <h2>Résumé de la Proposition</h2>
+                </div>
+
+                <div class="result-grid">
+                    <div class="result-section">
+                        <div class="label">Coordonnées</div>
+                        <div class="value">
+                            <p id="resultNom">—</p>
+                            <p class="sub" id="resultTel">—</p>
+                        </div>
+                    </div>
+
+                    <div class="result-section">
+                        <div class="label">Format</div>
+                        <div class="value" id="resultFormat">—</div>
+                    </div>
+
+                    <div class="result-section">
+                        <div class="label">Emplacement &amp; Régularité d'entretien</div>
+                        <div class="value" id="resultEmplacement">—</div>
+                    </div>
+
+                    <div class="result-section">
+                        <div class="label">Budget Prévu</div>
+                        <div class="value" id="resultBudget">—</div>
+                    </div>
+
+                    <div class="result-section full-width">
+                        <div class="label">Résumé du projet</div>
+                        <div class="value">
+                            <p><strong id="resultObjet">—</strong></p>
+                            <p class="sub" id="resultDescription">—</p>
+                        </div>
+                    </div>
+
+
+
+                    <div class="result-section full-width">
+                        <div class="label">Recommandations</div>
+                        <div class="value" id="resultRecos">
+                            Nous recommandons une approche visuelle épurée avec des contrastes élevés pour maximiser
+                            l'impact sur l'emplacement choisi. L'utilisation de formats animés est préconisée pour le
+                            support informatique.
+                        </div>
+                    </div>
+
+                    <div class="result-section full-width">
+                        <div class="label">Engagement agence</div>
+                        <div class="value">
+                            <ul class="engagement-list">
+                                <li>Conseiller disponible 24h/7j</li>
+                                <li>Pub certifiée droit d'auteur</li>
+                                <li>Emplacement stratégique</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Signature -->
+                <div class="result-signature">
+                    <div class="sig-label">Signature</div>
+                    <div class="sig-name">Affich'Pub Service Commercial</div>
+                </div>
+
+                <!-- Actions -->
+                <div class="result-actions">
+                    <button class="btn btn-outline" id="copyBtn">📋 Copier le résumé</button>
+                    <button class="btn btn-primary" id="pdfBtn">Télécharger PDF</button>
+                    <a href="contact.html" class="btn btn-outline">Contacter un conseiller</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>© 2024 Affich'Pub. Tous droits réservés. L'agence de communication visuelle de demain.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+    <script src="js/devis.js"></script>
+</body>
+
+</html>
