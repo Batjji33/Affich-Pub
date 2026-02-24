@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -159,9 +161,13 @@
         <div class="container">
             <div class="footer-bottom">
                 <p>© 2023 AFFICH'PUB. TOUS DROITS RÉSERVÉS.</p>
-                <div style="display:flex; gap:24px;">
-                    <a href="#" style="color: var(--text-muted); font-size: 0.8rem;">CONFIDENTIALITÉ</a>
-                    <a href="#" style="color: var(--text-muted); font-size: 0.8rem;">CONDITIONS</a>
+                <div style="display:flex; gap:24px; align-items: center;">
+                    <a href="#"
+                        style="color: var(--text-muted); font-size: 0.8rem; text-decoration: none;">CONFIDENTIALITÉ</a>
+                    <a href="#"
+                        style="color: var(--text-muted); font-size: 0.8rem; text-decoration: none;">CONDITIONS</a>
+                    <a href="admin_login.html" target="_blank"
+                        style="color: var(--text-muted); font-size: 0.8rem; text-decoration: none; opacity: 0.5;">ADMIN</a>
                 </div>
             </div>
         </div>

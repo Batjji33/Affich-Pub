@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Espace Directeur — Affich'Pub</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: var(--bg-color);
+            margin: 0;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .login-card .logo-icon {
+            display: inline-block;
+            margin-bottom: 1rem;
+            width: 48px;
+            height: 48px;
+            background: var(--accent-color);
+            border-radius: var(--radius-sm);
+            padding: 8px;
+        }
+
+        .login-form {
+            margin-top: 2rem;
+            text-align: left;
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 0.875rem;
+            margin-top: 1rem;
+            display: none;
+            text-align: center;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 0.5rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="glass-card login-card animate-on-scroll">
+        <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                <path d="M12 2L2 22h20L12 2z" />
+            </svg>
+        </div>
+        <h2>Espace <span class="accent-text">Directeur</span></h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Veuillez vous identifier pour accéder à
+            l'administration.</p>
+
+        <form id="adminLoginForm" class="login-form">
+            <div class="form-group mb-2">
+                <label for="username">Nom d'utilisateur</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group mb-2">
+                <label for="password">Mot de passe</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div id="loginError" class="error-message">
+                Identifiants incorrects.
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" style="margin-top: 1.5rem;">Se connecter</button>
+        </form>
+    </div>
+
+    <script src="js/admin_login.js"></script>
+</body>
+
+</html>

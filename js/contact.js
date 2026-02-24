@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusText = document.getElementById('statusText');
     const closeTime = document.getElementById('closeTime');
 
-    function updateStatus() {
+    async function updateStatus() {
         if (!statusDot || !statusText || !closeTime) return;
 
         const now = new Date();
@@ -30,20 +30,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isVacation = vacationPeriods.some(period => dateStr >= period.start && dateStr <= period.end);
 
-        // Schedule definition
-        let schedule = [];
+        // Default Schedule definition
+        let defaultSchedule = [];
 
         if (!isVacation) {
-            if (day === 3) schedule = [[17, 19]];
-            else if (day >= 1 && day <= 4) schedule = [[18, 19]];
-            else if (day === 5) schedule = [];
-            else if (day === 6) schedule = [[11, 12], [14, 18]];
-            else if (day === 0) schedule = [[14, 18]];
+            if (day === 3) defaultSchedule = [[17, 19]];
+            else if (day >= 1 && day <= 4) defaultSchedule = [[18, 19]];
+            else if (day === 5) defaultSchedule = [];
+            else if (day === 6) defaultSchedule = [[11, 12], [14, 18]];
+            else if (day === 0) defaultSchedule = [[14, 18]];
         } else {
-            if (day === 1) schedule = [[14, 18]];
-            else if (day >= 2 && day <= 4) schedule = [[11, 12], [14, 18]];
-            else if (day === 5 || day === 6) schedule = [[11, 12], [14, 19]];
-            else if (day === 0) schedule = [[14, 18]];
+            if (day === 1) defaultSchedule = [[14, 18]];
+            else if (day >= 2 && day <= 4) defaultSchedule = [[11, 12], [14, 18]];
+            else if (day === 5 || day === 6) defaultSchedule = [[11, 12], [14, 19]];
+            else if (day === 0) defaultSchedule = [[14, 18]];
+        }
+
+        // Apply temporary hours if available
+        let schedule = defaultSchedule;
+        let tempHoursRecord = null;
+
+        if (supabase) {
+            try {
+                const { data, error } = await supabase
+                    .from('temporary_hours')
+                    .select('*')
+                    .eq('date', dateStr)
+                    .single();
+
+                if (data) {
+                    tempHoursRecord = data;
+                    if (data.is_closed) {
+                        schedule = []; // Closed all day
+                    } else if (data.schedule) {
+                        schedule = data.schedule; // Override with temp schedule
+                    }
+                }
+            } catch (err) {
+                // Ignore error, fallback to default schedule
+                console.log("No temporary hours found for today or DB error");
+            }
         }
 
         let isOpen = false;
@@ -62,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // If closed, check if opening soon
+        // If closed, check if opening soon (today)
         if (!isOpen) {
             for (const [start, end] of schedule) {
                 if (time < start) {
@@ -71,12 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 }
             }
-        }
-
-        // Determine next opening message if no targetTime found for today
-        if (!isOpen && targetTime === null) {
-            msg = 'Ouvre demain'; // Default fallback
-            // More precise logic could be added here for "Ouvre demain à..."
         }
 
         // Helper to format time
@@ -104,13 +124,21 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 statusDot.classList.add('closed');
                 statusText.textContent = 'ACTUELLEMENT FERMÉ';
-                // Find next status message like original script
-                closeTime.textContent = getNextStatusMsg(isVacation, day, time);
+                // If it was explicitly closed today via temp hours, just say "Consultez les horaires" or "Fermé exceptionnellement"
+                // Otherwise find next status message
+                closeTime.textContent = getNextStatusMsg(isVacation, day, time, tempHoursRecord ? schedule : null);
             }
         }
     }
 
-    function getNextStatusMsg(isVacation, day, time) {
+    function getNextStatusMsg(isVacation, day, time, temporarySchedule = null) {
+        if (temporarySchedule) {
+            // If there's a custom schedule for today and we are here, it means we are closed.
+            // Ideally we'd look at tomorrow's schedule, but since temporary schedules are date-specific,
+            // we default to the standard logic for "tomorrow"
+            return 'Consultez les horaires';
+        }
+
         // Simple version of the original logic for closed state
         if (!isVacation) {
             if (day === 3) {
@@ -149,7 +177,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'Consultez les horaires';
     }
 
-    // Update immediately and every minute
+    // --- SUPABASE CONFIG ---
+    const SUPABASE_URL = 'https://cyeppawyuxjlvjmpgnvr.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_8oqpftdX0RKpD4WPdVWBvg_IbUMafrW';
+    let supabase = null;
+    try {
+        if (SUPABASE_URL.startsWith('http')) {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
+    } catch (e) {
+        console.error("Supabase initiation failed", e);
+    }
+
+    // Update immediately and then every minute
     updateStatus();
     setInterval(updateStatus, 60000);
 

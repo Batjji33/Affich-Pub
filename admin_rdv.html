@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration — Mon RDV</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .admin-nav {
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .admin-nav .nav-links a {
+            color: var(--accent-color);
+        }
+
+        .admin-badge {
+            background: var(--accent-color);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        .slot-action-btn {
+            margin-top: 10px;
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+
+        .slot-action-btn:hover {
+            opacity: 0.8;
+        }
+
+        .btn-cancel {
+            background-color: #ef4444;
+            color: white;
+        }
+
+        .btn-block {
+            background-color: #f59e0b;
+            color: black;
+        }
+
+        .btn-unblock {
+            background-color: #10b981;
+            color: white;
+        }
+
+        .admin-slot-details {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .admin-slot-details p {
+            margin: 5px 0;
+            font-size: 0.95rem;
+        }
+
+        /* Override some time-slot styles for admin to show status clearly */
+        .time-slot.booked-client {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.5);
+            color: white;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .time-slot.blocked-admin {
+            background: rgba(245, 158, 11, 0.2);
+            border-color: rgba(245, 158, 11, 0.5);
+            color: white;
+            cursor: pointer;
+            text-decoration: line-through;
+        }
+
+        .time-slot.available {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.3);
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ===== NAVIGATION (ADMIN) ===== -->
+    <nav class="navbar admin-nav" id="navbar">
+        <div class="container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                        <path d="M12 2L2 22h20L12 2z" />
+                    </svg>
+                </span>
+                AFFICH'PUB <span class="admin-badge">DIRECTEUR</span>
+            </a>
+            <div class="nav-links" id="navLinks">
+                <a href="admin_rdv.html" class="active">Gérer les RDV</a>
+                <a href="admin_contact.html">Gérer les Horaires</a>
+                <a href="#" id="logoutBtn" style="color:#ef4444;">Déconnexion</a>
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ===== PAGE HEADER ===== -->
+    <section class="page-hero" style="padding: 120px 0 60px;">
+        <div class="container">
+            <h1>Gestion des <span class="accent-text">RDV</span></h1>
+            <p>Annulez des réservations ou bloquez/débloquez des créneaux horaires.</p>
+        </div>
+    </section>
+
+    <!-- ===== RESERVATION SECTION ===== -->
+    <section class="reservation-section">
+        <div class="container">
+            <div class="reservation-grid">
+                <!-- Left: Calendar -->
+                <div class="calendar-card glass-card animate-on-scroll">
+                    <div class="calendar-header">
+                        <button id="prevMonth" class="cal-nav-btn">&lt;</button>
+                        <h2 id="currentMonth">Mois Année</h2>
+                        <button id="nextMonth" class="cal-nav-btn">&gt;</button>
+                    </div>
+                    <div class="calendar-weekdays">
+                        <div>Lun</div>
+                        <div>Mar</div>
+                        <div>Mer</div>
+                        <div>Jeu</div>
+                        <div>Ven</div>
+                        <div>Sam</div>
+                        <div>Dim</div>
+                    </div>
+                    <div class="calendar-days" id="calendarDays">
+                        <!-- Days generated by JS -->
+                    </div>
+                </div>
+
+                <!-- Right: Time Slots & Actions -->
+                <div class="slots-card glass-card animate-on-scroll delay-1">
+                    <div class="slots-header">
+                        <h2>Créneaux du jour</h2>
+                        <p id="selectedDateDisplay">Veuillez sélectionner une date</p>
+                    </div>
+
+                    <div class="time-slots-container" id="timeSlotsContainer" style="display: none;">
+                        <div class="time-slots-grid" id="timeSlots">
+                            <!-- Slots generated by JS -->
+                        </div>
+                    </div>
+                    <div id="noSlotsMsg" class="no-slots-msg">Sélectionnez une date pour voir les créneaux.</div>
+
+                    <!-- Slot Action Container -->
+                    <div id="slotActionContainer" style="display: none; margin-top: 2rem;">
+                        <h3>Action pour <span id="selectedSlotDisplay" class="accent-text"></span></h3>
+
+                        <div id="slotDetails" class="admin-slot-details">
+                            <!-- Dynamic Content -->
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script src="js/main.js"></script>
+    <script src="js/admin_rdv.js"></script>
+</body>
+
+</html>

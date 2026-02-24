@@ -159,14 +159,17 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { data, error } = await supabase
                 .from('reservations')
-                .select('time')
+                .select('time, last_name')
                 .eq('date', dateStr);
 
             if (error) throw error;
 
             existingBookings = data.map(row => {
-                // Formatting time 'HH:MM:SS' to 'HH:MM'
-                return row.time.substring(0, 5);
+                // Return object with time and status
+                return {
+                    time: row.time.substring(0, 5),
+                    isBlocked: row.last_name === 'BLOCKED'
+                };
             });
         } catch (error) {
             console.error("Error fetching bookings:", error);
@@ -246,13 +249,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const slotEl = document.createElement('div');
             slotEl.classList.add('time-slot');
 
-            const isBooked = existingBookings.includes(time);
+            const booking = existingBookings.find(b => b.time === time);
 
-            if (isBooked) {
-                slotEl.classList.add('booked');
-                const span = document.createElement('span');
-                span.textContent = time;
-                slotEl.appendChild(span);
+            if (booking) {
+                if (booking.isBlocked) {
+                    slotEl.classList.add('booked');
+                    slotEl.style.textDecoration = 'line-through';
+                    slotEl.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                    slotEl.style.color = '#ef4444';
+                    slotEl.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    const span = document.createElement('span');
+                    span.textContent = "Fermé";
+                    slotEl.appendChild(span);
+                } else {
+                    slotEl.classList.add('booked');
+                    const span = document.createElement('span');
+                    span.textContent = time;
+                    slotEl.appendChild(span);
+                }
             } else {
                 slotEl.textContent = time;
                 hasAvailableSlot = true;

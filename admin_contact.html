@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration — Horaires</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .admin-nav {
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .admin-nav .nav-links a {
+            color: var(--accent-color);
+        }
+
+        .admin-badge {
+            background: var(--accent-color);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        .hours-editor-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .time-interval {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .time-interval input[type="time"] {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .remove-interval-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        .add-interval-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px dashed rgba(255, 255, 255, 0.3);
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        .add-interval-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .toggle-closed {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+        }
+
+        .toggle-closed input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .cal-day.has-exception {
+            border: 2px solid var(--accent-color);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ===== NAVIGATION (ADMIN) ===== -->
+    <nav class="navbar admin-nav" id="navbar">
+        <div class="container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                        <path d="M12 2L2 22h20L12 2z" />
+                    </svg>
+                </span>
+                AFFICH'PUB <span class="admin-badge">DIRECTEUR</span>
+            </a>
+            <div class="nav-links" id="navLinks">
+                <a href="admin_rdv.html">Gérer les RDV</a>
+                <a href="admin_contact.html" class="active">Gérer les Horaires</a>
+                <a href="#" id="logoutBtn" style="color:#ef4444;">Déconnexion</a>
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ===== PAGE HEADER ===== -->
+    <section class="page-hero" style="padding: 120px 0 60px;">
+        <div class="container">
+            <h1>Gestion des <span class="accent-text">Horaires</span></h1>
+            <p>Définissez des fermetures exceptionnelles ou des horaires temporaires pour un jour précis.</p>
+        </div>
+    </section>
+
+    <!-- ===== CONTACT SECTION ===== -->
+    <section class="contact-section">
+        <div class="container">
+            <div class="contact-grid">
+                <!-- Left: Calendar -->
+                <div class="calendar-card glass-card animate-on-scroll">
+                    <div class="calendar-header">
+                        <button id="prevMonth" class="cal-nav-btn">&lt;</button>
+                        <h2 id="currentMonth">Mois Année</h2>
+                        <button id="nextMonth" class="cal-nav-btn">&gt;</button>
+                    </div>
+                    <div class="calendar-weekdays">
+                        <div>Lun</div>
+                        <div>Mar</div>
+                        <div>Mer</div>
+                        <div>Jeu</div>
+                        <div>Ven</div>
+                        <div>Sam</div>
+                        <div>Dim</div>
+                    </div>
+                    <div class="calendar-days" id="calendarDays">
+                        <!-- Days generated by JS -->
+                    </div>
+                    <p style="text-align:center; font-size:0.8rem; margin-top:10px; color:var(--text-muted)">
+                        Les jours encadrés en jaune ont des horaires modifiés.
+                    </p>
+                </div>
+
+                <!-- Right: Hours Editor -->
+                <div class="hours-card glass-card animate-on-scroll delay-1">
+                    <div class="slots-header">
+                        <h2>Éditer une journée</h2>
+                        <p id="selectedDateDisplay">Veuillez sélectionner une date</p>
+                    </div>
+
+                    <div id="editorContainer" style="display: none;">
+                        <div class="hours-editor-card">
+
+                            <div class="toggle-closed">
+                                <input type="checkbox" id="isClosedCheckbox">
+                                <label for="isClosedCheckbox" style="font-weight:bold; color:white; cursor:pointer;">
+                                    Fermé toute la journée
+                                </label>
+                            </div>
+
+                            <div id="scheduleEditor">
+                                <h3>Horaires d'ouverture</h3>
+                                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">
+                                    Définissez les plages horaires d'ouverture (ex: 10:00 - 12:00).
+                                </p>
+
+                                <div id="intervalsContainer">
+                                    <!-- Intervals generated by JS -->
+                                </div>
+
+                                <button type="button" class="add-interval-btn" id="addIntervalBtn">+ Ajouter une plage
+                                    horaire</button>
+                            </div>
+
+                            <button type="button" class="btn btn-primary btn-full" id="saveHoursBtn">Enregistrer les
+                                modifications</button>
+                            <button type="button" class="btn btn-outline btn-full mt-2" id="deleteHoursBtn"
+                                style="border-color:#ef4444; color:#ef4444; display:none;">Rétablir les horaires par
+                                défaut</button>
+                        </div>
+                    </div>
+
+                    <div id="noDateMsg" class="no-slots-msg" style="margin-top:20px;">Sélectionnez une date dans le
+                        calendrier pour modifier ses horaires.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script src="js/main.js"></script>
+    <script src="js/admin_contact.js"></script>
+</body>
+
+</html>
