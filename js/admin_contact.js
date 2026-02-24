@@ -181,6 +181,37 @@ document.addEventListener('DOMContentLoaded', () => {
         populateEditor(selectedRecord);
     };
 
+    const getDefaultScheduleForDate = (date) => {
+        const day = date.getDay(); // 0=Sunday, 1=Monday...
+        const dateStr = formatDate(date);
+
+        // Zone B School Holidays 2025-2026 (Nantes)
+        const vacationPeriods = [
+            { start: '2025-10-18', end: '2025-11-02' },
+            { start: '2025-12-20', end: '2026-01-04' },
+            { start: '2026-02-14', end: '2026-03-01' },
+            { start: '2026-04-11', end: '2026-04-26' },
+            { start: '2026-05-14', end: '2026-05-17' },
+            { start: '2026-07-04', end: '2026-08-31' }
+        ];
+
+        const isVacation = vacationPeriods.some(period => dateStr >= period.start && dateStr <= period.end);
+
+        let defaultSchedule = [];
+        if (!isVacation) {
+            if (day === 3) defaultSchedule = [[17, 19]];
+            else if (day >= 1 && day <= 4) defaultSchedule = [[18, 19]];
+            else if (day === 6) defaultSchedule = [[11, 12], [14, 18]];
+            else if (day === 0) defaultSchedule = [[14, 18]];
+        } else {
+            if (day === 1) defaultSchedule = [[14, 18]];
+            else if (day >= 2 && day <= 4) defaultSchedule = [[11, 12], [14, 18]];
+            else if (day === 5 || day === 6) defaultSchedule = [[11, 12], [14, 19]];
+            else if (day === 0) defaultSchedule = [[14, 18]];
+        }
+        return defaultSchedule;
+    };
+
     // --- EDITOR LOGIC ---
     const populateEditor = (record) => {
         intervalsContainer.innerHTML = '';
@@ -202,11 +233,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } else {
-            // New entry
+            // New entry - pre-fill with default schedule
             deleteHoursBtn.style.display = 'none';
             isClosedCheckbox.checked = false;
             scheduleEditor.style.display = 'block';
-            addIntervalUI(); // Default empty interval
+
+            const defSchedule = getDefaultScheduleForDate(selectedDate);
+            if (defSchedule.length > 0) {
+                defSchedule.forEach(interval => addIntervalUI(interval[0], interval[1]));
+            } else {
+                // If it's a completely closed day by default, still offer an empty interval to open it
+                addIntervalUI();
+            }
         }
     };
 

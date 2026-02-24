@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedDate = null;
     let selectedTimeSlot = null;
     let existingBookings = []; // Will store {date: 'YYYY-MM-DD', time: 'HH:MM'}
+    let temporaryHoursRecord = null; // Stores temporary hours for the selected date
 
     // --- DOM ELEMENTS ---
     const monthDisplay = document.getElementById('currentMonth');
@@ -171,9 +172,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     isBlocked: row.last_name === 'BLOCKED'
                 };
             });
+
+            // Also fetch temporary hours for this date
+            const { data: tempHours } = await supabase
+                .from('temporary_hours')
+                .select('*')
+                .eq('date', dateStr)
+                .single();
+
+            temporaryHoursRecord = tempHours || null;
+
         } catch (error) {
-            console.error("Error fetching bookings:", error);
-            existingBookings = [];
+            // PGRST116 means no temporary hours found, ignore it.
+            if (error.code !== 'PGRST116') {
+                console.error("Error fetching bookings:", error);
+            }
+            if (!existingBookings.length && !temporaryHoursRecord) {
+                // If there was an error not related to 0 rows
+            }
         }
     };
 
@@ -200,6 +216,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 slots.push(`${h.toString().padStart(2, '0')}:30`);
             }
         };
+
+        if (temporaryHoursRecord) {
+            if (temporaryHoursRecord.is_closed) return [];
+            const sched = temporaryHoursRecord.schedule || [];
+            sched.forEach(interval => addSlots(interval[0], interval[1]));
+            return slots;
+        }
 
         if (!isVacation) {
             // School Period

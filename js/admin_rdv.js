@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedTimeSlot = null;
     let existingBookings = []; // Complete row data
     let selectedBooking = null; // To hold data for the selected slot
+    let temporaryHoursRecord = null; // Stores temporary hours for the selected date
 
     // --- DOM ELEMENTS ---
     const monthDisplay = document.getElementById('currentMonth');
@@ -161,9 +162,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (error) throw error;
             existingBookings = data || [];
+
+            // Fetch temporary hours for this date
+            const { data: tempHours } = await supabase
+                .from('temporary_hours')
+                .select('*')
+                .eq('date', dateStr)
+                .single();
+            temporaryHoursRecord = tempHours || null;
+
         } catch (error) {
-            console.error("Error fetching bookings:", error);
-            existingBookings = [];
+            if (error.code !== 'PGRST116') {
+                console.error("Error fetching bookings:", error);
+            }
+            if (!existingBookings.length && !temporaryHoursRecord) {
+                // If there was an error not related to 0 rows
+            }
         }
     };
 
@@ -190,6 +204,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 slots.push(`${h.toString().padStart(2, '0')}:30`);
             }
         };
+
+        if (temporaryHoursRecord) {
+            if (temporaryHoursRecord.is_closed) return [];
+            const sched = temporaryHoursRecord.schedule || [];
+            sched.forEach(interval => addSlots(interval[0], interval[1]));
+            return slots;
+        }
 
         if (!isVacation) {
             if (dayOfWeek === 3) addSlots(17, 19);

@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
     const closeTime = document.getElementById('closeTime');
+    const exceptionNotice = document.getElementById('exceptionNotice');
 
     async function updateStatus() {
         if (!statusDot || !statusText || !closeTime) return;
@@ -124,9 +125,20 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 statusDot.classList.add('closed');
                 statusText.textContent = 'ACTUELLEMENT FERMÉ';
-                // If it was explicitly closed today via temp hours, just say "Consultez les horaires" or "Fermé exceptionnellement"
-                // Otherwise find next status message
                 closeTime.textContent = getNextStatusMsg(isVacation, day, time, tempHoursRecord ? schedule : null);
+            }
+        }
+
+        if (exceptionNotice) {
+            if (tempHoursRecord) {
+                exceptionNotice.style.display = 'block';
+                if (tempHoursRecord.is_closed) {
+                    exceptionNotice.textContent = "⚠ Exceptionnellement fermé aujourd'hui";
+                } else {
+                    exceptionNotice.textContent = "⚠ Horaires exceptionnels aujourd'hui";
+                }
+            } else {
+                exceptionNotice.style.display = 'none';
             }
         }
     }
