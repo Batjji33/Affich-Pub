@@ -317,7 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error("Error saving hours", error);
-            alert("Erreur lors de l'enregistrement.");
+            alert("❌ Erreur de base de données : " + (error.message || "Impossible d'enregistrer"));
+            alert("CONSEIL : Vérifiez que votre table 'temporary_hours' autorise l'ajout (INSERT) et la modification (UPDATE) dans Supabase (onglet Policies).");
         } finally {
             saveHoursBtn.textContent = 'Enregistrer les modifications';
             saveHoursBtn.disabled = false;
@@ -339,7 +340,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 await renderCalendar();
             } catch (error) {
                 console.error("Error deleting", error);
-                alert("Erreur lors de la suppression.");
+                alert("❌ Erreur de suppression : " + (error.message || "Accès refusé"));
+                alert("CONSEIL : Vérifiez que votre table 'temporary_hours' autorise la suppression (DELETE) dans Supabase.");
             } finally {
                 deleteHoursBtn.disabled = false;
             }
