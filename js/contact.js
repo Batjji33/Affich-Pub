@@ -34,7 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let schedule = [];
 
         if (!isVacation) {
-            if (day >= 1 && day <= 4) schedule = [[18, 19]];
+            if (day === 3) schedule = [[17, 19]];
+            else if (day >= 1 && day <= 4) schedule = [[18, 19]];
             else if (day === 5) schedule = [];
             else if (day === 6) schedule = [[11, 12], [14, 18]];
             else if (day === 0) schedule = [[14, 18]];
@@ -112,9 +113,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function getNextStatusMsg(isVacation, day, time) {
         // Simple version of the original logic for closed state
         if (!isVacation) {
-            if (day >= 1 && day <= 4) {
-                if (time < 18) return 'Ouvre à 18:00';
+            if (day === 3) {
+                if (time < 17) return 'Ouvre à 17:00';
                 return 'Ouvre demain à 18:00';
+            } else if (day >= 1 && day <= 4) {
+                if (time < 18) return 'Ouvre à 18:00';
+                const nextOpen = (day === 2) ? '17:00' : '18:00'; // If Tue, tomorrow is Wed 17h.
+                return `Ouvre demain à ${nextOpen}`;
             } else if (day === 5) return 'Ouvre demain à 11:00';
             else if (day === 6) {
                 if (time < 11) return 'Ouvre à 11:00';

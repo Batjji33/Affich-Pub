@@ -200,7 +200,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!isVacation) {
             // School Period
-            if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+            if (dayOfWeek === 3) {
+                addSlots(17, 19);
+            } else if (dayOfWeek >= 1 && dayOfWeek <= 4) {
                 addSlots(18, 19);
             } else if (dayOfWeek === 6) {
                 addSlots(11, 12);
