@@ -267,7 +267,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p>Les clients ne peuvent pas le réserver.</p>
                     <button class="slot-action-btn btn-unblock" id="unblockBtn">Débloquer ce créneau</button>
                 `;
-                document.getElementById('unblockBtn').addEventListener('click', () => deleteBooking(booking.id));
+                const btn = document.getElementById('unblockBtn');
+                btn.addEventListener('click', async () => {
+                    btn.disabled = true;
+                    btn.textContent = 'Déblocage...';
+                    await deleteBooking(booking.id);
+                });
             } else {
                 slotDetails.innerHTML = `
                     <p style="color: #ef4444; font-weight: bold;">📅 Réservé par un client</p>
@@ -276,9 +281,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p><strong>Téléphone :</strong> ${booking.phone}</p>
                     <button class="slot-action-btn btn-cancel" id="cancelBtn">Annuler ce RDV</button>
                 `;
-                document.getElementById('cancelBtn').addEventListener('click', () => {
+                const btn = document.getElementById('cancelBtn');
+                btn.addEventListener('click', async () => {
                     if (confirm(`Voulez-vous vraiment annuler le RDV de ${booking.first_name} ${booking.last_name} ?`)) {
-                        deleteBooking(booking.id);
+                        btn.disabled = true;
+                        btn.textContent = 'Annulation...';
+                        await deleteBooking(booking.id);
                     }
                 });
             }
@@ -288,7 +296,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p>Aucune réservation pour le moment.</p>
                 <button class="slot-action-btn btn-block" id="blockBtn">Bloquer ce créneau</button>
             `;
-            document.getElementById('blockBtn').addEventListener('click', blockSlot);
+            const btn = document.getElementById('blockBtn');
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                btn.textContent = 'Blocage...';
+                await blockSlot();
+            });
         }
 
         slotActionContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
