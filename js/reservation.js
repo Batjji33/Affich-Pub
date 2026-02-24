@@ -176,14 +176,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const getAvailableHoursForDay = (date) => {
         const dayOfWeek = date.getDay(); // 0 = Sun
+        const dateStr = formatDate(date);
 
-        // Business logic for opening hours
-        // Let's assume standard hours to simplify for the MVP: 09:00 to 18:00
-        // with 1h break at 12:00
+        // Zone B School Holidays 2025-2026 (Nantes)
+        const vacationPeriods = [
+            { start: '2025-10-18', end: '2025-11-02' },
+            { start: '2025-12-20', end: '2026-01-04' },
+            { start: '2026-02-14', end: '2026-03-01' },
+            { start: '2026-04-11', end: '2026-04-26' },
+            { start: '2026-05-14', end: '2026-05-17' }, // Pont de l'Ascension
+            { start: '2026-07-04', end: '2026-08-31' }
+        ];
+
+        const isVacation = vacationPeriods.some(period => dateStr >= period.start && dateStr <= period.end);
         const slots = [];
-
-        // Skip Sunday
-        if (dayOfWeek === 0) return slots;
 
         const addSlots = (startHour, endHour) => {
             for (let h = startHour; h < endHour; h++) {
@@ -192,19 +198,30 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        // Depends on school / vacation period theoretically, but let's use a standard template
-        if (dayOfWeek === 6) {
-            // Saturday
-            addSlots(11, 12);
-            addSlots(14, 18);
-        } else if (dayOfWeek === 5) {
-            // Friday
-            addSlots(9, 12);
-            addSlots(14, 18);
+        if (!isVacation) {
+            // School Period
+            if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+                addSlots(18, 19);
+            } else if (dayOfWeek === 6) {
+                addSlots(11, 12);
+                addSlots(14, 18);
+            } else if (dayOfWeek === 0) {
+                addSlots(14, 18);
+            }
+            // Fri (5) is closed -> no slots added
         } else {
-            // Mon-Thu
-            addSlots(10, 12);
-            addSlots(14, 18);
+            // Vacation Period
+            if (dayOfWeek === 1) {
+                addSlots(14, 18);
+            } else if (dayOfWeek >= 2 && dayOfWeek <= 4) {
+                addSlots(11, 12);
+                addSlots(14, 18);
+            } else if (dayOfWeek === 5 || dayOfWeek === 6) {
+                addSlots(11, 12);
+                addSlots(14, 19);
+            } else if (dayOfWeek === 0) {
+                addSlots(14, 18);
+            }
         }
 
         return slots;
