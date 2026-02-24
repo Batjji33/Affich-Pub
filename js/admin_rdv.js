@@ -220,8 +220,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const slotEl = document.createElement('div');
             slotEl.classList.add('time-slot');
 
-            // Check if booked
-            const booking = existingBookings.find(b => b.time.substring(0, 5) === time);
+            // Find booking for this slot
+            // Improved comparison: check for both exact and substring match
+            const booking = existingBookings.find(b => {
+                if (!b.time) return false;
+                const bTime = b.time.length > 5 ? b.time.substring(0, 5) : b.time;
+                return bTime === time;
+            });
 
             if (booking) {
                 if (booking.last_name === 'BLOCKED') {
@@ -270,8 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const btn = document.getElementById('unblockBtn');
                 btn.addEventListener('click', async () => {
                     btn.disabled = true;
-                    btn.textContent = 'Déblocage...';
-                    await deleteBooking(booking.id);
+                    btn.textContent = 'Déblocage en cours...';
+                    await deleteBooking(booking.id, formatDate(selectedDate), time);
                 });
             } else {
                 slotDetails.innerHTML = `
@@ -285,8 +290,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.addEventListener('click', async () => {
                     if (confirm(`Voulez-vous vraiment annuler le RDV de ${booking.first_name} ${booking.last_name} ?`)) {
                         btn.disabled = true;
-                        btn.textContent = 'Annulation...';
-                        await deleteBooking(booking.id);
+                        btn.textContent = 'Annulation en cours...';
+                        await deleteBooking(booking.id, formatDate(selectedDate), time);
                     }
                 });
             }
@@ -313,22 +318,41 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- SUPABASE ACTIONS ---
-    const deleteBooking = async (id) => {
+    const deleteBooking = async (id, dateStr, timeStr) => {
         if (!supabase) return;
+
         try {
-            const { error } = await supabase
+            // First try deleting by ID (strongest)
+            console.log("Tentative de suppression de l'ID:", id);
+            const { error: errorById } = await supabase
                 .from('reservations')
                 .delete()
                 .eq('id', id);
 
-            if (error) throw error;
+            if (errorById) {
+                console.warn("Échec de suppression par ID, tentative par date/heure:", errorById);
+                // Fallback for cases where ID might be tricky or RLS issues with ID
+                const { error: errorByDateTime } = await supabase
+                    .from('reservations')
+                    .delete()
+                    .eq('date', dateStr)
+                    .eq('time', timeStr.length === 5 ? timeStr + ':00' : timeStr);
+
+                if (errorByDateTime) {
+                    throw new Error(errorByDateTime.message);
+                }
+            }
 
             hideActionPanel();
-            await fetchBookingsForDate(formatDate(selectedDate));
+            // Refresh logic
+            const currentFormattedDate = formatDate(selectedDate);
+            await fetchBookingsForDate(currentFormattedDate);
             renderTimeSlots();
+
+            alert("✅ Opération réussie.");
         } catch (error) {
             console.error("Error deleting:", error);
-            alert("Erreur lors de l'opération.");
+            alert("Erreur lors de la suppression : " + (error.message || "Erreur inconnue"));
         }
     };
 
