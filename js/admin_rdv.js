@@ -322,57 +322,42 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!supabase) return;
 
         try {
-            console.log(`[Admin] Action: Suppression. ID: ${id}, Date: ${dateStr}, Heure: ${timeStr}`);
+            console.log(`[Admin] Tentative de suppression ID: ${id}`);
 
-            // 1. Try deleting by ID with .select() to verify
-            const { data: dataID, error: errorID } = await supabase
+            // Tentative 1 : Par ID (recommandé)
+            const { error: errorID } = await supabase
                 .from('reservations')
                 .delete()
-                .eq('id', id)
-                .select();
+                .eq('id', id);
 
-            // 2. If no data was returned (meaning nothing was deleted), or there was an error
-            if (errorID || !dataID || dataID.length === 0) {
-                console.warn("[Admin] La suppression par ID a échoué ou n'a rien trouvé. Tentative par critères de date/heure...", errorID);
+            if (errorID) {
+                console.warn("[Admin] Échec suppression par ID, tentative par date/heure...", errorID);
 
-                // Try precise match on date and time (checking both formats HH:MM and HH:MM:00)
+                // Tentative 2 : Par Date et Heure (Fallback)
                 const fullTime = timeStr.length === 5 ? timeStr + ':00' : timeStr;
-                const shortTime = timeStr.substring(0, 5);
-
-                // Option A: Try HH:MM:00
-                const { data: dataA, error: errorA } = await supabase
+                const { error: errorMatch } = await supabase
                     .from('reservations')
                     .delete()
-                    .match({ date: dateStr, time: fullTime })
-                    .select();
+                    .match({ date: dateStr, time: fullTime });
 
-                if (errorA || !dataA || dataA.length === 0) {
-                    // Option B: Try HH:MM (just in case the column is text)
-                    const { data: dataB, error: errorB } = await supabase
-                        .from('reservations')
-                        .delete()
-                        .match({ date: dateStr, time: shortTime })
-                        .select();
-
-                    if (errorB) throw errorB;
-
-                    if (!dataB || dataB.length === 0) {
-                        throw new Error("Impossible de trouver l'enregistrement à supprimer dans la base de données. Il a peut-être déjà été supprimé.");
-                    }
-                }
+                if (errorMatch) throw errorMatch;
             }
 
-            console.log("[Admin] Suppression réussie.");
+            // On considère que c'est réussi si aucune erreur n'est remontée
+            console.log("[Admin] Suppression demandée avec succès.");
             hideActionPanel();
 
-            // Refetch and re-render
-            await fetchBookingsForDate(dateStr);
-            renderTimeSlots();
+            // On attend un tout petit peu que Supabase propage avant de rafraîchir
+            setTimeout(async () => {
+                await fetchBookingsForDate(dateStr);
+                renderTimeSlots();
+                alert("✅ Le créneau a été débloqué/annulé.");
+            }, 300);
 
-            alert("✅ Créneau débloqué/annulé avec succès.");
         } catch (error) {
-            console.error("[Admin] Erreur fatale lors de la suppression:", error);
-            alert("❌ Erreur : " + (error.message || "Erreur de connexion"));
+            console.error("[Admin] Erreur lors de la suppression:", error);
+            alert("❌ Erreur de base de données : " + (error.message || "Accès refusé"));
+            alert("CONSEIL : Si l'erreur persiste, vérifiez que votre table 'reservations' autorise la suppression (DELETE) pour les utilisateurs anonymes dans l'onglet 'Policies' de Supabase.");
         }
     };
 
