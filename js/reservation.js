@@ -255,11 +255,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (booking.isBlocked) {
                     slotEl.classList.add('booked');
                     slotEl.style.textDecoration = 'line-through';
-                    slotEl.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                    slotEl.style.color = '#ef4444';
-                    slotEl.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    slotEl.style.backgroundColor = 'rgba(245, 158, 11, 0.1)'; // Orange bg
+                    slotEl.style.color = '#f59e0b'; // Orange text
+                    slotEl.style.borderColor = 'rgba(245, 158, 11, 0.3)';
                     const span = document.createElement('span');
-                    span.textContent = "Fermé";
+                    span.textContent = time; // Show the time crossed out instead of "Fermé"
                     slotEl.appendChild(span);
                 } else {
                     slotEl.classList.add('booked');
