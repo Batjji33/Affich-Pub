@@ -2117,21 +2117,7 @@ input[type=range]::-moz-range-thumb {
   min-height: 54px;
 }
 
-.time-slot.booked::after {
-  content: "RÉSERVÉ";
-  position: absolute;
-  top: 65%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 0.55rem;
-  font-weight: 800;
-  background: var(--danger);
-  color: #fff;
-  padding: 1px 4px;
-  border-radius: 3px;
-  opacity: 1;
-  letter-spacing: 0.5px;
-}
+
 
 .time-slot.booked span {
   opacity: 0.5;
