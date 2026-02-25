@@ -9,7 +9,10 @@
         content="Affich'Pub, agence de communication visuelle fondée en 1980. Une vision internationale, une créativité sans limites.">
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/xml' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+    <!-- Supabase & Shared Status -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/status.js"></script>
 </head>
 
 <body>
@@ -364,6 +367,14 @@
     </footer>
 
     <script src="js/main.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const elements = {
+                statusDot: document.querySelector('.hero-badge .dot')
+            };
+            StatusManager.init(elements);
+        });
+    </script>
 </body>
 
 </html>

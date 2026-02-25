@@ -173,14 +173,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
             });
 
-            // Also fetch temporary hours for this date
-            const { data: tempHours } = await supabase
+            // Also fetch temporary hours for this date (using limit(1) to avoid duplicate record errors)
+            const { data: tempHoursData, error: tempError } = await supabase
                 .from('temporary_hours')
                 .select('*')
                 .eq('date', dateStr)
-                .single();
+                .limit(1);
 
-            temporaryHoursRecord = tempHours || null;
+            if (tempError) throw tempError;
+            temporaryHoursRecord = (tempHoursData && tempHoursData.length > 0) ? tempHoursData[0] : null;
 
         } catch (error) {
             // PGRST116 means no temporary hours found, ignore it.
