@@ -154,9 +154,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 .from('temporary_hours')
                 .select('*')
                 .eq('date', dateStr)
-                .single();
-            if (error && error.code !== 'PGRST116') throw error; // ignore no rows
-            return data || null;
+                .limit(1);
+            if (error) throw error;
+            return data && data.length > 0 ? data[0] : null;
         } catch (error) {
             console.error("Error fetching date hour:", error);
             return null;
@@ -369,7 +369,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm("Voulez-vous supprimer ces horaires modifiés et revenir aux horaires par défaut ?")) {
             deleteHoursBtn.disabled = true;
             try {
-                const { error } = await supabase.from('temporary_hours').delete().eq('id', selectedRecord.id);
+                const dateStr = formatDate(selectedDate);
+                const { error } = await supabase.from('temporary_hours').delete().eq('date', dateStr);
                 if (error) throw error;
 
                 alert('✅ Horaires par défaut rétablis.');
