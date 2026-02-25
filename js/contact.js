@@ -27,12 +27,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadWeeklyExceptions() {
         if (!supabase) return;
         const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+
         const day = now.getDay() === 0 ? 7 : now.getDay(); // 1=Mon, ..., 7=Sun
 
         // Start of current week (Monday)
         const start = new Date(now);
         start.setDate(now.getDate() - day + 1);
-        const startStr = start.toISOString().split('T')[0];
 
         // End of current week (Sunday)
         const end = new Date(start);
@@ -43,14 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const { data, error } = await supabase
                 .from('temporary_hours')
                 .select('*')
-                .gte('date', startStr)
+                .gte('date', todayStr)
                 .lte('date', endStr)
                 .order('date', { ascending: true });
 
-            if (data && data.length > 0) {
-                weeklyExceptions = data;
-                renderWeeklyExceptions();
-            }
+            weeklyExceptions = data || [];
+            renderWeeklyExceptions();
         } catch (e) {
             console.error(e);
         }
