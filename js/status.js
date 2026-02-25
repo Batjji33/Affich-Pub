@@ -136,41 +136,37 @@ const StatusManager = (() => {
         return `${h}:${m.toString().padStart(2, '0')}`;
     }
 
-    function getNextStatusMsg(isVacation, day, time, temporarySchedule = null) {
-        if (temporarySchedule) return 'Consultez les horaires';
+    function getNextStatusMsg() {
+        const now = new Date();
 
-        if (!isVacation) {
-            if (day === 3) {
-                if (time < 17) return 'Ouvre à 17:00';
-                return 'Ouvre demain à 18:00';
-            } else if (day >= 1 && day <= 4) {
-                if (time < 18) return 'Ouvre à 18:00';
-                const nextOpen = (day === 2) ? '17:00' : '18:00';
-                return `Ouvre demain à ${nextOpen}`;
-            } else if (day === 5) return 'Ouvre demain à 11:00';
-            else if (day === 6) {
-                if (time < 11) return 'Ouvre à 11:00';
-                if (time < 14) return 'Ouvre à 14:00';
-                return 'Ouvre demain à 14:00';
-            } else if (day === 0) {
-                if (time < 14) return 'Ouvre à 14:00';
-                return 'Ouvre demain à 18:00';
+        // Loop through next 7 days to find the first opening
+        for (let i = 0; i <= 7; i++) {
+            const checkDate = new Date(now);
+            checkDate.setDate(now.getDate() + i);
+            const dateStr = checkDate.toISOString().split('T')[0];
+            const day = checkDate.getDay();
+
+            // Get schedule for this specific date
+            const { schedule: defaultSchedule } = getDefaultSchedule(day, dateStr);
+            let schedule = defaultSchedule;
+
+            const tempRecord = weeklyExceptions.find(r => r.date === dateStr);
+            if (tempRecord) {
+                if (tempRecord.is_closed) schedule = [];
+                else if (tempRecord.schedule) schedule = tempRecord.schedule;
             }
-        } else {
-            if (day === 1) {
-                if (time < 14) return 'Ouvre à 14:00';
-                return 'Ouvre demain à 11:00';
-            } else if (day >= 2 && day <= 4) {
-                if (time < 11) return 'Ouvre à 11:00';
-                if (time < 14) return 'Ouvre à 14:00';
-                return 'Ouvre demain à 11:00';
-            } else if (day === 5 || day === 6) {
-                if (time < 11) return 'Ouvre à 11:00';
-                if (time < 14) return 'Ouvre à 14:00';
-                return day === 5 ? 'Ouvre demain à 11:00' : 'Ouvre demain à 14:00';
-            } else if (day === 0) {
-                if (time < 14) return 'Ouvre à 14:00';
-                return 'Ouvre demain à 14:00';
+
+            // Only consider times in the future
+            const currentTime = (i === 0) ? (now.getHours() + now.getMinutes() / 60) : 0;
+
+            for (const [start, end] of schedule) {
+                if (start > currentTime) {
+                    const timeStr = formatTime(start);
+                    if (i === 0) return `Ouvre à ${timeStr}`;
+                    if (i === 1) return `Ouvre demain à ${timeStr}`;
+                    const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                    return `Ouvre ${days[day]} à ${timeStr}`;
+                }
             }
         }
         return 'Consultez les horaires';
@@ -196,10 +192,10 @@ const StatusManager = (() => {
         }
 
         if (closeTime) {
-            if (status.targetTime) {
-                closeTime.textContent = (status.isOpen ? 'Ferme à ' : 'Ouvre à ') + formatTime(status.targetTime);
+            if (status.isOpen && status.targetTime) {
+                closeTime.textContent = `Ferme à ${formatTime(status.targetTime)}`;
             } else {
-                closeTime.textContent = getNextStatusMsg(status.isVacation, status.day, status.time, status.tempHoursRecord ? status.currentSchedule : null);
+                closeTime.textContent = getNextStatusMsg();
             }
         }
 

@@ -12,6 +12,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const weeklyExceptionsContainer = document.getElementById('weeklyExceptionsContainer');
+    const schoolPeriod = document.getElementById('schoolPeriod');
+    const vacationPeriod = document.getElementById('vacationPeriod');
+
+    // Toggle periods display based on current date
+    const now = new Date();
+    const { isVacation } = StatusManager.getDefaultSchedule(now.getDay(), now.toISOString().split('T')[0]);
+
+    if (isVacation) {
+        if (schoolPeriod) schoolPeriod.style.display = 'none';
+    } else {
+        if (vacationPeriod) vacationPeriod.style.display = 'none';
+    }
 
     function renderWeeklyExceptions(weeklyExceptions) {
         if (!weeklyExceptionsContainer) return;
