@@ -199,9 +199,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const slots = [];
 
         const addSlots = (startHour, endHour) => {
-            for (let h = startHour; h < endHour; h++) {
-                slots.push(`${h.toString().padStart(2, '0')}:00`);
-                slots.push(`${h.toString().padStart(2, '0')}:30`);
+            let current = startHour;
+            while (current < endHour) {
+                const hh = Math.floor(current);
+                const mm = (current % 1 === 0) ? "00" : "30";
+                slots.push(`${hh.toString().padStart(2, '0')}:${mm}`);
+                current += 0.5;
             }
         };
 
