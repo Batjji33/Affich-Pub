@@ -272,11 +272,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let hasAvailableSlot = false;
 
+        const now = new Date();
+        const isToday = selectedDate.getDate() === now.getDate() &&
+            selectedDate.getMonth() === now.getMonth() &&
+            selectedDate.getFullYear() === now.getFullYear();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
         slots.forEach(time => {
             const slotEl = document.createElement('div');
             slotEl.classList.add('time-slot');
 
             const booking = existingBookings.find(b => b.time === time);
+
+            let isPast = false;
+            if (isToday) {
+                const [h, m] = time.split(':').map(Number);
+                const slotMins = h * 60 + m;
+                if (currentMinutes >= slotMins + 15) {
+                    isPast = true;
+                }
+            }
 
             if (booking) {
                 if (booking.isBlocked) {
@@ -294,6 +309,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     span.textContent = time;
                     slotEl.appendChild(span);
                 }
+            } else if (isPast) {
+                slotEl.classList.add('past');
+                slotEl.style.textDecoration = 'line-through';
+                slotEl.style.color = 'var(--text-muted)';
+                slotEl.style.backgroundColor = 'var(--surface-light)';
+                slotEl.style.borderColor = 'var(--surface-border)';
+                slotEl.style.cursor = 'not-allowed';
+                slotEl.style.opacity = '0.5';
+                slotEl.textContent = time;
             } else {
                 slotEl.textContent = time;
                 hasAvailableSlot = true;
