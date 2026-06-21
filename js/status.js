@@ -39,7 +39,16 @@ const StatusManager = (() => {
                 .order('date', { ascending: true });
 
             if (error) throw error;
-            weeklyExceptions = data || [];
+            // Deduplicate by date: keep only the latest record (highest id) per date
+            const raw = data || [];
+            const byDate = {};
+            raw.forEach(r => {
+                if (!byDate[r.date] || r.id > byDate[r.date].id) {
+                    byDate[r.date] = r;
+                }
+            });
+            weeklyExceptions = Object.values(byDate);
+            weeklyExceptions.sort((a, b) => a.date.localeCompare(b.date));
             return weeklyExceptions;
         } catch (e) {
             console.error("Error loading weekly exceptions:", e);
@@ -85,11 +94,26 @@ const StatusManager = (() => {
         let schedule = defaultSchedule;
         let tempHoursRecord = weeklyExceptions.find(r => r.date === dateStr) || null;
 
+        // Check if the temp record is actually different from the default
         if (tempHoursRecord) {
-            if (tempHoursRecord.is_closed) {
-                schedule = [];
-            } else if (tempHoursRecord.schedule) {
-                schedule = tempHoursRecord.schedule;
+            const tempSch = tempHoursRecord.is_closed ? [] : (tempHoursRecord.schedule || []);
+            const isRealChange = (() => {
+                if (tempSch.length !== defaultSchedule.length) return true;
+                for (let i = 0; i < tempSch.length; i++) {
+                    if (tempSch[i][0] !== defaultSchedule[i][0] || tempSch[i][1] !== defaultSchedule[i][1]) return true;
+                }
+                return false;
+            })();
+
+            if (isRealChange) {
+                if (tempHoursRecord.is_closed) {
+                    schedule = [];
+                } else if (tempHoursRecord.schedule) {
+                    schedule = tempHoursRecord.schedule;
+                }
+            } else {
+                // Not a real change — ignore this record
+                tempHoursRecord = null;
             }
         }
 
@@ -152,8 +176,13 @@ const StatusManager = (() => {
 
             const tempRecord = weeklyExceptions.find(r => r.date === dateStr);
             if (tempRecord) {
-                if (tempRecord.is_closed) schedule = [];
-                else if (tempRecord.schedule) schedule = tempRecord.schedule;
+                const tempSch = tempRecord.is_closed ? [] : (tempRecord.schedule || []);
+                const isReal = tempSch.length !== defaultSchedule.length ||
+                    tempSch.some((s, idx) => s[0] !== defaultSchedule[idx][0] || s[1] !== defaultSchedule[idx][1]);
+                if (isReal) {
+                    if (tempRecord.is_closed) schedule = [];
+                    else if (tempRecord.schedule) schedule = tempRecord.schedule;
+                }
             }
 
             // Only consider times in the future

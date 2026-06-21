@@ -1,0 +1,51 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Cleanup</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Cleaning up Supabase...</h1>
+    <div id="status"></div>
+    <script>
+        const SUPABASE_URL = 'https://cyeppawyuxjlvjmpgnvr.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_8oqpftdX0RKpD4WPdVWBvg_IbUMafrW';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function cleanup() {
+            const status = document.getElementById('status');
+            const lastWeek = new Date();
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            const lastWeekStr = lastWeek.toISOString().split('T')[0];
+
+            status.innerHTML += `<p>Cleaning up data before ${lastWeekStr}...</p>`;
+
+            try {
+                // Delete reservations
+                const { data: resData, error: resError } = await supabase
+                    .from('reservations')
+                    .delete()
+                    .lt('date', lastWeekStr);
+                
+                if (resError) status.innerHTML += `<p style="color:red">Error deleting reservations: ${resError.message}</p>`;
+                else status.innerHTML += `<p style="color:green">Old reservations deleted.</p>`;
+
+                // Delete temporary_hours
+                const { data: tempData, error: tempError } = await supabase
+                    .from('temporary_hours')
+                    .delete()
+                    .lt('date', lastWeekStr);
+
+                if (tempError) status.innerHTML += `<p style="color:red">Error deleting temporary_hours: ${tempError.message}</p>`;
+                else status.innerHTML += `<p style="color:green">Old temporary_hours deleted.</p>`;
+
+                status.innerHTML += `<p><b>Cleanup finished.</b></p>`;
+            } catch (err) {
+                status.innerHTML += `<p style="color:red">Cleanup failed: ${err.message}</p>`;
+            }
+        }
+        cleanup();
+    </script>
+</body>
+</html>

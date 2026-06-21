@@ -141,7 +141,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 .from('temporary_hours')
                 .select('*');
             if (error) throw error;
-            temporaryHours = data || [];
+            // Deduplicate by date: keep only the latest record (highest id) per date
+            const raw = data || [];
+            const byDate = {};
+            raw.forEach(r => {
+                if (!byDate[r.date] || r.id > byDate[r.date].id) {
+                    byDate[r.date] = r;
+                }
+            });
+            temporaryHours = Object.values(byDate);
         } catch (error) {
             console.error("Error fetching temporary hours:", error);
         }
@@ -339,16 +347,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let error;
             if (selectedRecord) {
-                // Update
+                // Update existing record
                 const res = await supabase.from('temporary_hours').update(payload).eq('id', selectedRecord.id);
                 error = res.error;
             } else {
-                // Insert
+                // First, delete any existing records for this date to avoid duplicates
+                await supabase.from('temporary_hours').delete().eq('date', dateStr);
+                // Then insert the new record
                 const res = await supabase.from('temporary_hours').insert([payload]);
                 error = res.error;
             }
 
             if (error) throw error;
+
+            // Clean up any duplicate records for the same date (keep only latest)
+            const { data: allForDate } = await supabase
+                .from('temporary_hours')
+                .select('id')
+                .eq('date', dateStr)
+                .order('id', { ascending: false });
+            if (allForDate && allForDate.length > 1) {
+                const idsToDelete = allForDate.slice(1).map(r => r.id);
+                await supabase.from('temporary_hours').delete().in('id', idsToDelete);
+            }
 
             alert('✅ Horaires enregistrés avec succès.');
             await renderCalendar(); // refresh ui
@@ -370,10 +391,24 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteHoursBtn.disabled = true;
             try {
                 const dateStr = formatDate(selectedDate);
-                const { error } = await supabase.from('temporary_hours').delete().eq('date', dateStr);
-                if (error) throw error;
+                // Delete by ID first (most reliable)
+                await supabase.from('temporary_hours').delete().eq('id', selectedRecord.id);
+                // Also delete any other records for the same date (cleanup duplicates)
+                await supabase.from('temporary_hours').delete().eq('date', dateStr);
 
-                alert('✅ Horaires par défaut rétablis.');
+                // Verify deletion worked
+                const { data: remaining } = await supabase
+                    .from('temporary_hours')
+                    .select('id')
+                    .eq('date', dateStr);
+                if (remaining && remaining.length > 0) {
+                    console.warn('Delete may have failed (RLS?), records still exist for date:', dateStr);
+                    alert('⚠ La suppression semble avoir échoué. Vérifiez les règles de sécurité (RLS / Policies) pour DELETE dans Supabase.');
+                } else {
+                    alert('✅ Horaires par défaut rétablis.');
+                }
+
+                selectedRecord = null;
                 editorContainer.style.display = 'none';
                 noDateMsg.style.display = 'block';
                 await renderCalendar();
