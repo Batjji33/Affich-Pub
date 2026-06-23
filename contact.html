@@ -60,10 +60,15 @@
                 <div class="glass-card contact-info-card animate-on-scroll">
                     <div class="section-label">Contactez-nous</div>
 
-                    <div class="phone-label">Numéro de téléphone</div>
-                    <div class="phone-number">07 78 38 97 21</div>
+                    <div class="support-info" style="margin-bottom: 24px; border-color: rgba(239, 68, 68, 0.5); background-color: rgba(239, 68, 68, 0.05);">
+                        <span class="info-icon">🔒</span>
+                        <p style="color: #ef4444;"><strong>Informations protégées</strong><br>Suite à une tentative d'utilisation abusive de données personnelles, ces informations ont été masquées publiquement pour des raisons de sécurité.</p>
+                    </div>
 
-                    <div class="support-info" style="margin-bottom: 24px; border-color: rgba(255, 229, 0, 0.3);">
+                    <div class="phone-label">Numéro de téléphone</div>
+                    <div class="phone-number" style="filter: blur(6px); user-select: none; opacity: 0.7;" title="Information masquée">06 12 34 56 78</div>
+
+                    <div class="support-info" style="margin-bottom: 24px; border-color: rgba(255, 229, 0, 0.3); opacity: 0.6; filter: grayscale(100%);">
                         <span class="info-icon">📱</span>
                         <p>Merci de privilégier les <strong>SMS</strong> pour toute demande. Les appels sont strictement
                             réservés aux <strong>urgences</strong>.</p>
@@ -72,21 +77,19 @@
                     <div class="addresses-label">Notre adresse</div>
 
                     <div class="address-item">
-                        <div class="address-icon">📍</div>
+                        <div class="address-icon" style="opacity: 0.6;">📍</div>
                         <div>
                             <h4>Siège Principal</h4>
-                            <p>2, rue de la clairière<br>44240 La Chapelle-sur-Erdre, France</p>
-                            <a href="https://www.google.com/maps/search/?api=1&query=2+rue+de+la+clairière+la-chapelle-sur-erdre+44240"
-                                target="_blank" class="map-link">
-                                Voir sur la carte →
-                            </a>
+                            <p style="filter: blur(6px); user-select: none; opacity: 0.7;" title="Information masquée">123, avenue de la Confidentialité<br>00000 Ville Protégée, France</p>
+                            <span class="map-link" style="color: var(--text-muted); cursor: not-allowed;">
+                                <s>Voir sur la carte →</s>
+                            </span>
                         </div>
                     </div>
 
-                    <a href="https://www.google.com/maps/search/?api=1&query=2+rue+de+la+clairière+la-chapelle-sur-erdre+44240"
-                        target="_blank" class="btn btn-primary itinerary-btn">
-                        🧭 Obtenir l'itinéraire
-                    </a>
+                    <button class="btn btn-primary itinerary-btn" disabled style="opacity: 0.5; cursor: not-allowed; pointer-events: none; width: 100%;">
+                        🧭 Obtenir l'itinéraire (Désactivé)
+                    </button>
                 </div>
 
                 <!-- Right: Hours -->
