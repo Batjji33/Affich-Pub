@@ -383,7 +383,14 @@ document.addEventListener('DOMContentLoaded', () => {
     //  ACTION 3 — CRÉER LA PUBLICITÉ (chatbot + image)
     // ======================================================
     const ART_PROMPT = `Tu es un directeur artistique expert en publicité. À partir des informations du devis fourni, aide à affiner le concept visuel de la publicité en posant des questions (UNE à la fois) sur : la palette de couleurs, le texte principal/slogan, le style visuel, les éléments visuels souhaités, le public cible, l'ambiance générale.
-Quand tous les éléments sont définis, génère un prompt précis en anglais pour un modèle de génération d'image, optimisé pour une affiche publicitaire. Commence ce prompt par "AD_PROMPT:" sur une ligne séparée.`;
+
+Important : aucun modèle de génération d'image gratuit ne sait écrire du texte lisible à l'intérieur d'une image. Le texte/slogan ne doit donc JAMAIS être inclus dans le prompt visuel ni demandé au modèle d'image — il sera superposé séparément, par-dessus l'image, une fois celle-ci générée.
+
+Quand tous les éléments sont définis, réponds UNIQUEMENT avec ce format exact :
+AD_PROMPT:
+<prompt en anglais décrivant uniquement la scène visuelle : couleurs, composition, style, ambiance, éléments — sans aucun mot, lettre ni texte à afficher>
+TEXTE_PRINCIPAL:
+<le texte/slogan exact à superposer sur l'image, tel que validé par le client ; laisser vide si aucun texte n'est souhaité>`;
 
     let pubHistory = [];
     const pubChat = document.getElementById('pubChat');
@@ -449,40 +456,56 @@ Quand tous les éléments sont définis, génère un prompt précis en anglais p
         }
     }
 
+    function parseAdPromptReply(reply) {
+        const adIdx = reply.indexOf('AD_PROMPT:');
+        if (adIdx === -1) return null;
+
+        const intro = reply.slice(0, adIdx).trim();
+        const rest = reply.slice(adIdx + 'AD_PROMPT:'.length).trim();
+        const txtIdx = rest.indexOf('TEXTE_PRINCIPAL:');
+
+        let adPrompt = rest;
+        let texte = '';
+        if (txtIdx !== -1) {
+            adPrompt = rest.slice(0, txtIdx).trim();
+            texte = rest.slice(txtIdx + 'TEXTE_PRINCIPAL:'.length).trim();
+        }
+        return { intro, adPrompt, texte };
+    }
+
     function handlePubReply(reply) {
         pubHistory.push({ role: 'assistant', content: reply });
 
-        if (reply.includes('AD_PROMPT:')) {
-            const idx = reply.indexOf('AD_PROMPT:');
-            const intro = reply.slice(0, idx).trim();
-            const adPrompt = reply.slice(idx + 'AD_PROMPT:'.length).trim();
-
+        const parsed = parseAdPromptReply(reply);
+        if (parsed) {
+            const { intro, adPrompt, texte } = parsed;
             if (intro) pubAddBubble('bot', intro);
             pubAddBubble('bot', "✅ Concept finalisé ! Vous pouvez générer le visuel.");
             pubInputRow.style.display = 'none';
-            showGenerateButton(adPrompt);
+            showGenerateButton(adPrompt, texte);
         } else {
             pubAddBubble('bot', reply);
             pubSetEnabled(true);
         }
     }
 
-    function showGenerateButton(adPrompt) {
+    function showGenerateButton(adPrompt, texteOverlay) {
         pubGenZone.innerHTML = '';
         const btn = document.createElement('button');
         btn.className = 'btn btn-primary btn-full';
         btn.textContent = '🖼️ Générer le visuel';
-        btn.addEventListener('click', () => generateVisual(adPrompt, btn));
+        btn.addEventListener('click', () => generateVisual(adPrompt, texteOverlay, btn));
         pubGenZone.appendChild(btn);
 
         // Aperçu du prompt (repliable)
         const small = document.createElement('p');
         small.style.cssText = 'font-size:0.75rem;color:var(--text-muted);margin-top:8px;';
-        small.textContent = 'Prompt : ' + adPrompt;
+        small.textContent = 'Prompt : ' + adPrompt +
+            (texteOverlay ? ` | Texte superposé : « ${texteOverlay} »` : '');
         pubGenZone.appendChild(small);
     }
 
-    async function generateVisual(adPrompt, btn) {
+    async function generateVisual(adPrompt, texteOverlay, btn) {
         btn.disabled = true;
         btn.textContent = '⏳ Génération en cours (30–60s)…';
 
@@ -494,7 +517,7 @@ Quand tous les éléments sont définis, génère un prompt précis en anglais p
         try {
             const { image, mimeType } = await callGenAd(adPrompt);
             const dataUrl = `data:${mimeType};base64,${image}`;
-            renderGeneratedImage(dataUrl);
+            renderGeneratedImage(dataUrl, texteOverlay);
         } catch (err) {
             pubGenZone.innerHTML = `
                 <div class="gen-error">
@@ -506,55 +529,106 @@ Quand tous les éléments sont définis, génère un prompt précis en anglais p
             const retry = document.createElement('button');
             retry.className = 'btn btn-outline btn-full mt-2';
             retry.textContent = '🔄 Réessayer';
-            retry.addEventListener('click', () => generateVisual(adPrompt, retry));
+            retry.addEventListener('click', () => generateVisual(adPrompt, texteOverlay, retry));
             pubGenZone.appendChild(retry);
         }
     }
 
-    function renderGeneratedImage(dataUrl) {
+    // Découpe le texte en lignes qui rentrent dans maxWidth (canvas 2D)
+    function wrapCanvasText(ctx, text, maxWidth) {
+        const words = text.split(/\s+/).filter(Boolean);
+        const lines = [];
+        let current = '';
+        words.forEach(word => {
+            const test = current ? current + ' ' + word : word;
+            if (current && ctx.measureText(test).width > maxWidth) {
+                lines.push(current);
+                current = word;
+            } else {
+                current = test;
+            }
+        });
+        if (current) lines.push(current);
+        return lines;
+    }
+
+    // Superpose le slogan (texte réel, toujours lisible) en bas de l'image générée
+    function drawTextOverlay(ctx, canvas, text) {
+        if (!text) return;
+        const w = canvas.width;
+        const h = canvas.height;
+        const fontSize = Math.round(w * 0.055);
+        ctx.font = `700 ${fontSize}px Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const maxWidth = w * 0.86;
+        const lines = wrapCanvasText(ctx, text.toUpperCase(), maxWidth);
+        const lineHeight = fontSize * 1.25;
+        const bannerHeight = lines.length * lineHeight + fontSize * 0.9;
+        const bannerY = h - bannerHeight;
+
+        const gradient = ctx.createLinearGradient(0, bannerY, 0, h);
+        gradient.addColorStop(0, 'rgba(0,0,0,0)');
+        gradient.addColorStop(0.35, 'rgba(0,0,0,0.65)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0.8)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, bannerY, w, bannerHeight);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = fontSize * 0.15;
+        let ty = h - bannerHeight / 2 - ((lines.length - 1) * lineHeight) / 2;
+        lines.forEach(line => {
+            ctx.fillText(line, w / 2, ty);
+            ty += lineHeight;
+        });
+        ctx.shadowBlur = 0;
+    }
+
+    function renderGeneratedImage(dataUrl, texteOverlay) {
         pubGenZone.innerHTML = '';
         const wrap = document.createElement('div');
         wrap.className = 'gen-image-wrap';
 
         const img = new Image();
-        img.src = dataUrl;
-        img.alt = 'Visuel publicitaire généré';
-        wrap.appendChild(img);
-
-        const dl = document.createElement('button');
-        dl.className = 'btn btn-primary btn-full';
-        dl.textContent = '⬇️ Télécharger en PNG';
-        dl.addEventListener('click', () => downloadAsPng(img));
-        wrap.appendChild(dl);
-
-        const regen = document.createElement('p');
-        regen.style.cssText = 'font-size:0.75rem;color:var(--text-muted);margin-top:8px;text-align:center;';
-        regen.textContent = 'Astuce : relancez la création pour obtenir d’autres variantes.';
-        wrap.appendChild(regen);
-
-        pubGenZone.appendChild(wrap);
-    }
-
-    function downloadAsPng(img) {
-        try {
+        img.onload = () => {
             const canvas = document.createElement('canvas');
             canvas.width = img.naturalWidth || 1024;
             canvas.height = img.naturalHeight || 1024;
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            const link = document.createElement('a');
-            link.href = canvas.toDataURL('image/png');
-            link.download = 'visuel-affichpub.png';
-            link.click();
-        } catch (e) {
-            // Repli : téléchargement direct du data URL d'origine
-            const link = document.createElement('a');
-            link.href = img.src;
-            link.download = 'visuel-affichpub.png';
-            link.click();
-        }
-    }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            drawTextOverlay(ctx, canvas, (texteOverlay || '').trim());
 
+            const finalUrl = canvas.toDataURL('image/png');
+            const finalImg = new Image();
+            finalImg.src = finalUrl;
+            finalImg.alt = 'Visuel publicitaire généré';
+            wrap.insertBefore(finalImg, wrap.firstChild);
+
+            const dl = document.createElement('button');
+            dl.className = 'btn btn-primary btn-full';
+            dl.textContent = '⬇️ Télécharger en PNG';
+            dl.addEventListener('click', () => {
+                const link = document.createElement('a');
+                link.href = finalUrl;
+                link.download = 'visuel-affichpub.png';
+                link.click();
+            });
+            wrap.appendChild(dl);
+
+            const regen = document.createElement('p');
+            regen.style.cssText = 'font-size:0.75rem;color:var(--text-muted);margin-top:8px;text-align:center;';
+            regen.textContent = 'Astuce : relancez la création pour obtenir d’autres variantes.';
+            wrap.appendChild(regen);
+        };
+        img.onerror = () => {
+            wrap.innerHTML = `<div class="gen-error">⚠️ L'image générée n'a pas pu être chargée. Réessayez.</div>`;
+        };
+        img.src = dataUrl;
+
+        pubGenZone.appendChild(wrap);
+    }
     pubSend.addEventListener('click', pubSendMessage);
     pubInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); pubSendMessage(); }

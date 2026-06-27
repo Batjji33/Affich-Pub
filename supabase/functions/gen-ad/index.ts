@@ -1,14 +1,17 @@
 // ============================================================
-//  Edge Function "gen-ad" — Proxy Hugging Face (gratuit)
-//  Reçoit { prompt }, appelle FLUX.1-schnell, renvoie l'image
-//  encodée en base64 : { image, mimeType }.
+//  Edge Function "gen-ad" — Proxy Pollinations.ai (gratuit, sans clé)
+//  Reçoit { prompt }, génère une image et la renvoie en base64 :
+//  { image, mimeType }.
+//
+//  Note : aucun modèle de génération d'image gratuit ne sait rendre du
+//  texte lisible de façon fiable. Le prompt ne doit donc décrire que le
+//  visuel (couleurs, scène, style, composition) — le texte/slogan est
+//  superposé ensuite côté client (Canvas), de façon toujours parfaitement
+//  lisible. Voir js/admin_devis.js (renderGeneratedImage).
 // ============================================================
 import { corsHeaders } from "../_shared/cors.ts";
 
-// Hugging Face a décommissionné l'ancien domaine "api-inference.huggingface.co"
-// au profit du nouveau système de routage "Inference Providers".
-const HF_URL =
-  "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell";
+const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt";
 
 // Encode un ArrayBuffer en base64 par paquets (évite le dépassement de pile)
 function toBase64(buffer: ArrayBuffer): string {
@@ -28,56 +31,35 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const HF_TOKEN = Deno.env.get("HF_TOKEN");
-    if (!HF_TOKEN) {
-      throw new Error("HF_TOKEN non configuré (supabase secrets set HF_TOKEN=...)");
-    }
-
     const { prompt } = await req.json();
     if (!prompt || typeof prompt !== "string") {
       throw new Error("Le champ 'prompt' est manquant.");
     }
 
-    const hfResp = await fetch(HF_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${HF_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ inputs: prompt }),
-    });
+    const seed = Math.floor(Math.random() * 1_000_000);
+    const url =
+      `${POLLINATIONS_BASE}/${encodeURIComponent(prompt)}` +
+      `?width=1024&height=1024&model=flux&nologo=true&seed=${seed}`;
 
-    // Modèle en cours de chargement côté Hugging Face
-    if (hfResp.status === 503) {
+    const resp = await fetch(url);
+
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => "");
       return new Response(
         JSON.stringify({
-          error:
-            "Le modèle de génération d'image est en cours de chargement. Réessayez dans 30 à 60 secondes.",
-        }),
-        {
-          status: 503,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    if (!hfResp.ok) {
-      const detail = await hfResp.text();
-      return new Response(
-        JSON.stringify({
-          error: `Service de génération indisponible (code ${hfResp.status}).`,
+          error: `Service de génération indisponible (code ${resp.status}).`,
           detail,
         }),
         {
-          status: hfResp.status,
+          status: resp.status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
     }
 
-    const buffer = await hfResp.arrayBuffer();
+    const buffer = await resp.arrayBuffer();
     const image = toBase64(buffer);
-    const mimeType = hfResp.headers.get("content-type") || "image/jpeg";
+    const mimeType = resp.headers.get("content-type") || "image/jpeg";
 
     return new Response(JSON.stringify({ image, mimeType }), {
       status: 200,

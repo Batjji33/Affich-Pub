@@ -1,8 +1,8 @@
 # Devis IA — Guide de déploiement
 
 Fonctionnalité « Mon Devis IA » + page admin « Devis » pour Affich'Pub.
-IA 100 % gratuite : **Groq** (texte) et **Hugging Face** (images), via des **Edge Functions Supabase**
-(les clés API ne sont jamais exposées côté client).
+IA 100 % gratuite : **Groq** (texte) et **Pollinations.ai** (images, aucune clé requise), via des
+**Edge Functions Supabase** (les clés API ne sont jamais exposées côté client).
 
 ---
 
@@ -31,7 +31,7 @@ personnelles des clients). Créer **un utilisateur** :
 | Service | URL | Variable |
 |---|---|---|
 | Groq (texte) | https://console.groq.com | `GROQ_API_KEY` (commence par `gsk_`) |
-| Hugging Face (images) | https://huggingface.co/settings/tokens | `HF_TOKEN` (commence par `hf_`) |
+| Pollinations.ai (images) | https://pollinations.ai | aucune — service public, sans clé |
 
 ## 4. Déployer les Edge Functions (terminal, à la racine du projet)
 
@@ -42,7 +42,7 @@ supabase link --project-ref cyeppawyuxjlvjmpgnvr
 
 # Secrets (jamais côté client)
 supabase secrets set GROQ_API_KEY=gsk_xxxxxxxx
-supabase secrets set HF_TOKEN=hf_xxxxxxxx
+# Pollinations.ai ne nécessite aucune clé — rien à configurer pour gen-ad
 
 # Déploiement des fonctions.
 # --no-verify-jwt : les fonctions sont des proxys publics appelés depuis le
@@ -72,7 +72,7 @@ js/admin_devis.js       Auth, tableau, statut éditable, 3 actions IA
 css/style.css           + section « CHATBOT DEVIS IA » (réutilise le design system existant)
 supabase/schema.sql     Table devis + RLS
 supabase/functions/chat/index.ts     Proxy Groq (fallback llama-3.1-8b-instant si 429)
-supabase/functions/gen-ad/index.ts   Proxy Hugging Face FLUX.1-schnell (image → base64)
+supabase/functions/gen-ad/index.ts   Proxy Pollinations.ai (image → base64, sans clé)
 supabase/functions/_shared/cors.ts   En-têtes CORS partagés
 ```
 
@@ -88,6 +88,9 @@ prixEstime = prixBase[emplacement] * multReg[regularite] * semaines
 ## Points d'attention
 
 - **Groq rate limit** (~30 req/min) → bascule automatique sur `llama-3.1-8b-instant` (géré dans l'Edge Function).
-- **Image Hugging Face** : lente (30–60 s), parfois indisponible (503). L'admin voit un message
-  d'attente puis, en cas d'échec, une suggestion d'alternative (Canva / Adobe Express) + bouton Réessayer.
+- **Image Pollinations.ai** : gratuite et sans clé, mais sans support fiable du texte intégré à l'image.
+  Le prompt envoyé au modèle ne décrit donc que le visuel (couleurs, scène, style) — le slogan/texte
+  est superposé séparément, côté client, via Canvas (`renderGeneratedImage` dans `js/admin_devis.js`),
+  ce qui garantit un texte toujours net et lisible. En cas d'échec (service indisponible), l'admin voit
+  une suggestion d'alternative (Canva / Adobe Express) + bouton Réessayer.
 - **PDF** : jsPDF (mise en page sobre). Pour un contrôle CSS plus fin, envisager `html2pdf.js`.
