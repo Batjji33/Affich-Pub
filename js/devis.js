@@ -1,334 +1,482 @@
 /* ============================================
-   DEVIS.JS — Quote generator logic
-   Form validation, toggles, persistence,
-   AI simulation, copy/PDF
+   DEVIS.JS — Chatbot Devis IA
+   Conversation Groq (via Edge Function), quick
+   replies dynamiques, détection de fin de devis,
+   estimation tarifaire, PDF (jsPDF) + sauvegarde
+   Supabase.
    ============================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
 
-    const form = document.getElementById('devisForm');
-    const generateBtn = document.getElementById('generateBtn');
-    const resultSection = document.getElementById('devisResult');
-    const storageKey = 'devis_form_data';
+    // --- SUPABASE CONFIG (identique au reste du site) ---
+    const SUPABASE_URL = 'https://cyeppawyuxjlvjmpgnvr.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_8oqpftdX0RKpD4WPdVWBvg_IbUMafrW';
+    let supabase = null;
+    try {
+        if (SUPABASE_URL.startsWith('http')) {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
+    } catch (e) {
+        console.error('Supabase initiation failed', e);
+    }
 
-    // ---------- Format toggle (Manuel / Informatique) ----------
-    const toggleManuel = document.getElementById('toggleManuel');
-    const toggleInfo = document.getElementById('toggleInfo');
-    const formatInput = document.getElementById('format');
+    // --- DOM ---
+    const messagesEl = document.getElementById('chatMessages');
+    const typingEl = document.getElementById('chatTyping');
+    const quickRepliesEl = document.getElementById('quickReplies');
+    const actionsEl = document.getElementById('chatActions');
+    const formEl = document.getElementById('chatForm');
+    const inputEl = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('chatSend');
+    const genPdfBtn = document.getElementById('genPdfBtn');
+    const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 
-    [toggleManuel, toggleInfo].forEach(btn => {
-        btn.addEventListener('click', () => {
-            toggleManuel.classList.remove('active');
-            toggleInfo.classList.remove('active');
-            btn.classList.add('active');
-            formatInput.value = btn.dataset.value;
-            saveFormData();
-        });
-    });
+    // --- SYSTEM PROMPT ---
+    const SYSTEM_PROMPT = `Tu es l'assistant virtuel d'Affich'Pub, une régie publicitaire. Tu aides les clients à créer leur devis publicitaire de façon conversationnelle et professionnelle.
 
-    // ---------- Radio group (Régularité) ----------
-    const regulariteGroup = document.getElementById('regulariteGroup');
-    const regulariteInput = document.getElementById('regularite');
+Tu dois collecter dans cet ordre :
+1. Nom et prénom (ensemble)
+2. Âge
+3. Téléphone (format français : 06 ou 07, 10 chiffres)
+4. Format de diffusion : "manuel" (livraison physique sous 48h) ou "informatique" (diffusion numérique sous 7 jours ou pendant les vacances scolaires)
+5. Objet de la publicité
+6. Description détaillée : couleurs, texte principal, visuels souhaités, message clé. Si la réponse fait moins de 20 mots ou est trop vague, poser des questions de précision.
+7. Budget en euros
+8. Régularité : "quotidienne" ou "bi-hebdomadaire"
+9. Emplacement :
+   - Découverte : visibilité standard, tarif le plus accessible
+   - Standard : bonne visibilité, zones passantes, rapport qualité/prix optimal
+   - Premium : emplacements très fréquentés, visibilité maximale
+   Suggérer l'emplacement le plus adapté au budget, mais toujours demander validation.
+10. Date de début (JJ/MM/AAAA)
+11. Date de fin (max 1 mois après la date de début)
 
-    if (regulariteGroup) {
-        regulariteGroup.querySelectorAll('.radio-option').forEach(option => {
-            option.addEventListener('click', () => {
-                regulariteGroup.querySelectorAll('.radio-option').forEach(o => o.classList.remove('active'));
-                option.classList.add('active');
-                regulariteInput.value = option.dataset.value;
-                saveFormData();
+Règles :
+- UNE seule question à la fois
+- Si une information est invalide (téléphone incorrect, date passée, écart > 1 mois), expliquer et redemander
+- Si la description est vague (< 20 mots), relancer avec des questions précises
+- Toujours demander validation avant d'intégrer une suggestion
+- Ne pas communiquer les prix réels
+
+Quand tout est collecté et confirmé par le client, répondre UNIQUEMENT avec :
+DEVIS_COMPLET
+{"nom":"...","prenom":"...","age":...,"telephone":"...","format":"...","objet":"...","description":"...","budget":...,"regularite":"...","emplacement":"...","dateDebut":"JJ/MM/AAAA","dateFin":"JJ/MM/AAAA"}`;
+
+    // --- ÉTAT ---
+    const history = [];          // [{ role, content }] pour Groq
+    let devisData = null;        // données extraites de DEVIS_COMPLET
+    let generatedDoc = null;     // instance jsPDF générée
+    let isLocked = false;        // devis finalisé → saisie désactivée
+
+    // Message d'accueil (affiché + ajouté à l'historique comme 1er tour assistant)
+    const WELCOME = "Bonjour 👋 Je suis l'assistant Affich'Pub. Je vais vous aider à construire votre devis publicitaire en quelques minutes.\n\nPour commencer, quel est votre **nom et prénom** ?";
+
+    // ======================================================
+    //  RENDU DES MESSAGES
+    // ======================================================
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // Mini-formatage : **gras** et retours à la ligne
+    function formatText(str) {
+        return escapeHtml(str)
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n/g, '<br>');
+    }
+
+    function addMessage(role, text) {
+        const wrap = document.createElement('div');
+        wrap.className = `chat-bubble ${role === 'user' ? 'user' : 'bot'}`;
+        wrap.innerHTML = formatText(text);
+        messagesEl.appendChild(wrap);
+        scrollToBottom();
+    }
+
+    function scrollToBottom() {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function showTyping(show) {
+        typingEl.style.display = show ? 'block' : 'none';
+        if (show) scrollToBottom();
+    }
+
+    function setInputEnabled(enabled) {
+        inputEl.disabled = !enabled;
+        sendBtn.disabled = !enabled;
+        if (enabled && !isLocked) inputEl.focus();
+    }
+
+    // ======================================================
+    //  QUICK REPLIES
+    // ======================================================
+    function detectQuickReplies(text) {
+        const t = text.toLowerCase();
+
+        if (t.includes('manuel') && t.includes('informatique')) {
+            return ['Manuel (livraison sous 48h)', 'Informatique (sous 7 jours)'];
+        }
+        if ((t.includes('quotidienne') || t.includes('quotidien')) &&
+            (t.includes('bi-hebdomadaire') || t.includes('bihebdomadaire') || t.includes('bi hebdomadaire'))) {
+            return ['Diffusion quotidienne', 'Diffusion bi-hebdomadaire'];
+        }
+        if (t.includes('découverte') && t.includes('standard') && t.includes('premium')) {
+            return ['Découverte', 'Standard', 'Premium'];
+        }
+        if (t.includes('confirmez-vous') || t.includes('confirmez vous')) {
+            return ['Oui, je confirme', 'Non, je veux modifier'];
+        }
+        return [];
+    }
+
+    function renderQuickReplies(options) {
+        quickRepliesEl.innerHTML = '';
+        options.forEach(label => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'quick-reply';
+            btn.textContent = label;
+            btn.addEventListener('click', () => {
+                if (isLocked || inputEl.disabled) return;
+                quickRepliesEl.innerHTML = '';
+                sendUserMessage(label);
             });
+            quickRepliesEl.appendChild(btn);
         });
     }
 
-    // ---------- Budget Range ----------
-    const budgetRange = document.getElementById('budgetRange');
-    const budgetValue = document.getElementById('budgetValue');
-
-    if (budgetRange && budgetValue) {
-        budgetRange.addEventListener('input', () => {
-            budgetValue.textContent = `${budgetRange.value} €`;
-            saveFormData();
+    // ======================================================
+    //  APPEL GROQ (Edge Function "chat")
+    // ======================================================
+    async function callChat() {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'apikey': SUPABASE_KEY
+            },
+            body: JSON.stringify({
+                system: SYSTEM_PROMPT,
+                messages: history,
+                model: 'llama-3.3-70b-versatile'
+            })
         });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Erreur serveur (${res.status})`);
+        const content = data?.choices?.[0]?.message?.content;
+        if (!content) throw new Error('Réponse vide du serveur.');
+        return content.trim();
     }
 
-    // ---------- Persistence Logic ----------
-    function saveFormData() {
-        if (!form) return;
-        const formData = new FormData(form);
-        const data = {};
-        formData.forEach((value, key) => {
-            data[key] = value;
-        });
-        // Add active states for toggles and radios if not captured by FormData
-        data.activeFormat = formatInput.value;
-        data.activeRegularite = regulariteInput.value;
+    // ======================================================
+    //  ENVOI D'UN MESSAGE UTILISATEUR
+    // ======================================================
+    async function sendUserMessage(text) {
+        const msg = text.trim();
+        if (!msg || isLocked || inputEl.disabled) return;
 
-        localStorage.setItem(storageKey, JSON.stringify(data));
-    }
-
-    function loadFormData() {
-        const savedData = localStorage.getItem(storageKey);
-        if (!savedData) return;
+        addMessage('user', msg);
+        history.push({ role: 'user', content: msg });
+        inputEl.value = '';
+        quickRepliesEl.innerHTML = '';
+        setInputEnabled(false);
+        showTyping(true);
 
         try {
-            const data = JSON.parse(savedData);
-
-            // Text inputs, selects, textareas
-            Object.keys(data).forEach(key => {
-                const field = form.elements[key];
-                if (field && field.type !== 'hidden') {
-                    field.value = data[key];
-                }
-            });
-
-            // Budget
-            if (data.budget && budgetRange && budgetValue) {
-                budgetRange.value = data.budget;
-                budgetValue.textContent = `${data.budget} €`;
-            }
-
-            // Format buttons
-            if (data.activeFormat) {
-                formatInput.value = data.activeFormat;
-                toggleManuel.classList.remove('active');
-                toggleInfo.classList.remove('active');
-                if (data.activeFormat === 'manuel') toggleManuel.classList.add('active');
-                else toggleInfo.classList.add('active');
-            }
-
-            // Regularity buttons
-            if (data.activeRegularite && regulariteGroup) {
-                regulariteInput.value = data.activeRegularite;
-                regulariteGroup.querySelectorAll('.radio-option').forEach(option => {
-                    option.classList.remove('active');
-                    if (option.dataset.value === data.activeRegularite) option.classList.add('active');
-                });
-            }
-        } catch (e) {
-            console.error("Error loading form data", e);
+            const reply = await callChat();
+            showTyping(false);
+            handleBotReply(reply);
+        } catch (err) {
+            showTyping(false);
+            console.error(err);
+            addMessage('bot', "⚠️ Désolé, une erreur est survenue. Pouvez-vous réessayer dans un instant ?");
+            setInputEnabled(true);
         }
     }
 
-    // Listen for changes on all form elements
-    if (form) {
-        form.querySelectorAll('input, textarea, select').forEach(element => {
-            element.addEventListener('change', saveFormData);
-            element.addEventListener('input', saveFormData);
-        });
-        loadFormData();
-    }
+    // ======================================================
+    //  TRAITEMENT DE LA RÉPONSE DU BOT
+    // ======================================================
+    function handleBotReply(reply) {
+        history.push({ role: 'assistant', content: reply });
 
-    // ---------- Date Validation ----------
-    const dateDebut = document.getElementById('dateDebut');
-    const dateFin = document.getElementById('dateFin');
-    const dateError = document.getElementById('dateError');
-
-    function validateDates() {
-        if (!dateDebut.value || !dateFin.value) return true;
-
-        const start = new Date(dateDebut.value);
-        const end = new Date(dateFin.value);
-
-        const diffTime = end - start;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays < 0 || diffDays > 7) {
-            dateError.style.display = 'block';
-            return false;
-        } else {
-            dateError.style.display = 'none';
-            return true;
-        }
-    }
-
-    [dateDebut, dateFin].forEach(input => {
-        if (input) {
-            input.addEventListener('change', validateDates);
-        }
-    });
-
-    // ---------- Form validation ----------
-    function validateForm() {
-        let isValid = true;
-        const required = form.querySelectorAll('[required]');
-
-        required.forEach(field => {
-            const group = field.closest('.form-group');
-            if (!field.value.trim()) {
-                group.classList.add('has-error');
-                isValid = false;
-            } else {
-                group.classList.remove('has-error');
-            }
-        });
-
-        if (!validateDates()) {
-            isValid = false;
-        }
-
-        // Live validation on input
-        required.forEach(field => {
-            field.addEventListener('input', () => {
-                const group = field.closest('.form-group');
-                if (field.value.trim()) {
-                    group.classList.remove('has-error');
-                }
-            });
-        });
-
-        return isValid;
-    }
-
-    // ---------- Generate devis (AI simulation) ----------
-    if (form) {
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            if (!validateForm()) {
-                // Scroll to first error
-                const firstError = form.querySelector('.has-error') || dateError;
-                if (firstError) {
-                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
+        if (reply.includes('DEVIS_COMPLET')) {
+            const parsed = parseDevisComplet(reply);
+            if (parsed) {
+                devisData = parsed;
+                addMessage('bot', "✅ Parfait, votre devis est complet ! Voici un récapitulatif. Vous pouvez maintenant générer votre estimation en PDF ou prendre rendez-vous avec un conseiller.");
+                finalizeDevis();
                 return;
             }
+            // Si le JSON n'a pas pu être lu, on affiche un message neutre
+            addMessage('bot', "✅ Votre devis est complet ! Vous pouvez générer votre PDF ci-dessous.");
+            return;
+        }
 
-            // Show loading state
-            generateBtn.classList.add('loading');
-            generateBtn.disabled = true;
-
-            // Simulate AI generation delay
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            // Gather form data
-            const nom = document.getElementById('nom').value;
-            const prenom = document.getElementById('prenom').value;
-            const telephone = document.getElementById('telephone').value;
-            const format = document.getElementById('format').value;
-            const objet = document.getElementById('objet').value;
-            const description = document.getElementById('description').value;
-            const regularite = document.getElementById('regularite').value;
-            const emplacement = document.getElementById('emplacement');
-            const emplacementText = emplacement.options[emplacement.selectedIndex].text;
-            const debut = document.getElementById('dateDebut').value;
-            const fin = document.getElementById('dateFin').value;
-
-            // Populate result
-            document.getElementById('resultNom').textContent = `${prenom} ${nom}`;
-            document.getElementById('resultTel').textContent = telephone;
-            document.getElementById('resultBudget').textContent = `${budgetRange.value} €`;
-            document.getElementById('resultFormat').textContent =
-                format === 'manuel' ? 'Manuel (Print)' : 'Informatique (Digital)';
-            document.getElementById('resultEmplacement').textContent =
-                `${emplacementText} • ${regularite.charAt(0).toUpperCase() + regularite.slice(1)}`;
-            document.getElementById('resultObjet').textContent = objet;
-            document.getElementById('resultDescription').textContent =
-                `Description : ${description} (Du ${new Date(debut).toLocaleDateString()} au ${new Date(fin).toLocaleDateString()})`;
-
-            // Generate smart recommendations based on inputs
-            const recos = generateRecommendations(format, regularite, description);
-            document.getElementById('resultRecos').textContent = recos;
-
-            // Show result
-            generateBtn.classList.remove('loading');
-            generateBtn.disabled = false;
-            resultSection.classList.add('visible');
-
-            // Scroll to result
-            setTimeout(() => {
-                resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 200);
-        });
+        addMessage('bot', reply);
+        const quick = detectQuickReplies(reply);
+        if (quick.length) renderQuickReplies(quick);
+        setInputEnabled(true);
     }
 
-    function generateRecommendations(format, regularite, description) {
-        const recos = [];
+    function parseDevisComplet(reply) {
+        try {
+            const start = reply.indexOf('{');
+            const end = reply.lastIndexOf('}');
+            if (start === -1 || end === -1 || end <= start) return null;
+            return JSON.parse(reply.slice(start, end + 1));
+        } catch (e) {
+            console.error('Parsing DEVIS_COMPLET échoué', e);
+            return null;
+        }
+    }
 
-        if (format === 'informatique') {
-            recos.push('Nous recommandons une approche digitale avec des formats animés (vidéo courte, bannière interactive) pour maximiser l\'engagement en ligne.');
-            if (regularite === 'quotidien') {
-                recos.push('Pour une diffusion quotidienne, nous préconisons un système de templates dynamiques permettant des variations automatiques.');
+    // ======================================================
+    //  FINALISATION (affichage récap + actions)
+    // ======================================================
+    function finalizeDevis() {
+        isLocked = true;
+        setInputEnabled(false);
+        inputEl.placeholder = 'Devis finalisé — discussion terminée';
+        quickRepliesEl.innerHTML = '';
+
+        // Récapitulatif lisible
+        const d = devisData;
+        const recap =
+            `**Récapitulatif**\n` +
+            `• Client : ${d.prenom} ${d.nom}${d.age ? ' (' + d.age + ' ans)' : ''}\n` +
+            `• Téléphone : ${d.telephone || '—'}\n` +
+            `• Format : ${d.format}\n` +
+            `• Objet : ${d.objet}\n` +
+            `• Budget indiqué : ${d.budget} €\n` +
+            `• Régularité : ${d.regularite}\n` +
+            `• Emplacement : ${d.emplacement}\n` +
+            `• Période : du ${d.dateDebut} au ${d.dateFin}`;
+        addMessage('bot', recap);
+
+        actionsEl.style.display = 'flex';
+        scrollToBottom();
+    }
+
+    // ======================================================
+    //  NORMALISATION + ESTIMATION TARIFAIRE
+    // ======================================================
+    function normFormat(v) {
+        const s = (v || '').toLowerCase();
+        return (s.includes('informatique') || s.includes('numérique') || s.includes('digital'))
+            ? 'informatique' : 'manuel';
+    }
+    function normRegularite(v) {
+        const s = (v || '').toLowerCase();
+        return s.includes('quotidien') ? 'quotidienne' : 'bihebdomadaire';
+    }
+    function normEmplacement(v) {
+        const s = (v || '').toLowerCase();
+        if (s.includes('premium')) return 'premium';
+        if (s.includes('standard')) return 'standard';
+        return 'decouverte';
+    }
+    function parseFRDate(str) {
+        const m = (str || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (!m) return null;
+        return new Date(+m[3], +m[2] - 1, +m[1]);
+    }
+    function toISODate(d) {
+        if (!d || isNaN(d)) return null;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function computeEstimate(d) {
+        const prixBase = { decouverte: 150, standard: 300, premium: 600 };
+        const multReg = { quotidienne: 1.5, bihebdomadaire: 1.0 };
+
+        const emplacement = normEmplacement(d.emplacement);
+        const regularite = normRegularite(d.regularite);
+        const dateD = parseFRDate(d.dateDebut);
+        const dateF = parseFRDate(d.dateFin);
+
+        let semaines = 1;
+        if (dateD && dateF) {
+            semaines = Math.max(1, Math.ceil((dateF - dateD) / (7 * 24 * 3600 * 1000)));
+        }
+        const prixEstime = prixBase[emplacement] * multReg[regularite] * semaines;
+        return { emplacement, regularite, dateD, dateF, semaines, prixEstime };
+    }
+
+    // ======================================================
+    //  GÉNÉRATION PDF (jsPDF)
+    // ======================================================
+    function buildPdf(d, est) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+        const pageW = doc.internal.pageSize.getWidth();
+        const margin = 18;
+        let y = 20;
+
+        // En-tête
+        doc.setFillColor(255, 229, 0);
+        doc.rect(0, 0, pageW, 26, 'F');
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(22);
+        doc.text("AFFICH'PUB", margin, 17);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('Devis indicatif', pageW - margin, 13, { align: 'right' });
+        doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, pageW - margin, 19, { align: 'right' });
+
+        y = 40;
+        doc.setTextColor(20, 20, 20);
+
+        const sectionTitle = (label) => {
+            doc.setFillColor(245, 245, 245);
+            doc.rect(margin, y - 5, pageW - margin * 2, 8, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(0, 0, 0);
+            doc.text(label, margin + 2, y);
+            y += 9;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            doc.setTextColor(40, 40, 40);
+        };
+
+        const line = (label, value) => {
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${label} :`, margin + 2, y);
+            doc.setFont('helvetica', 'normal');
+            const wrapped = doc.splitTextToSize(String(value || '—'), pageW - margin * 2 - 45);
+            doc.text(wrapped, margin + 45, y);
+            y += wrapped.length * 5 + 2;
+        };
+
+        // Informations client
+        sectionTitle('Informations client');
+        line('Nom', d.nom);
+        line('Prénom', d.prenom);
+        line('Âge', d.age ? `${d.age} ans` : '—');
+        line('Téléphone', d.telephone);
+        y += 4;
+
+        // Détails de la publicité
+        sectionTitle('Détails de la publicité');
+        line('Format', normFormat(d.format) === 'informatique' ? 'Informatique (numérique)' : 'Manuel (print)');
+        line('Objet', d.objet);
+        line('Description', d.description);
+        line('Budget', `${d.budget} €`);
+        line('Régularité', est.regularite === 'quotidienne' ? 'Quotidienne' : 'Bi-hebdomadaire');
+        line('Emplacement', est.emplacement.charAt(0).toUpperCase() + est.emplacement.slice(1));
+        line('Période', `du ${d.dateDebut} au ${d.dateFin} (${est.semaines} semaine${est.semaines > 1 ? 's' : ''})`);
+        y += 4;
+
+        // Estimation tarifaire
+        sectionTitle('Estimation tarifaire (indicative)');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`${est.prixEstime.toLocaleString('fr-FR')} €`, margin + 2, y + 4);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(90, 90, 90);
+        doc.text('Montant estimatif, hors remises et options éventuelles.', margin + 45, y + 4);
+        y += 16;
+
+        // Mention légale
+        doc.setDrawColor(220, 220, 220);
+        doc.line(margin, y, pageW - margin, y);
+        y += 6;
+        doc.setFontSize(8);
+        doc.setTextColor(120, 120, 120);
+        const legal = doc.splitTextToSize(
+            "Ce devis est indicatif et non contractuel. Il ne remplace pas un rendez-vous avec un conseiller Affich'Pub. Les tarifs peuvent varier selon les disponibilités.",
+            pageW - margin * 2
+        );
+        doc.text(legal, margin, y);
+
+        return doc;
+    }
+
+    // ======================================================
+    //  SAUVEGARDE SUPABASE
+    // ======================================================
+    async function saveToSupabase(d, est) {
+        if (!supabase) return;
+        const row = {
+            nom: d.nom,
+            prenom: d.prenom,
+            age: Number.isFinite(+d.age) ? parseInt(d.age, 10) : null,
+            telephone: d.telephone || null,
+            format_diffusion: normFormat(d.format),
+            objet_pub: d.objet || null,
+            description_pub: d.description || null,
+            budget: Number.isFinite(+d.budget) ? parseFloat(d.budget) : null,
+            regularite: est.regularite,
+            emplacement: est.emplacement,
+            date_debut: toISODate(est.dateD),
+            date_fin: toISODate(est.dateF),
+            prix_estime: est.prixEstime,
+            conversation: { messages: history },
+            statut: 'nouveau'
+        };
+        try {
+            const { error } = await supabase.from('devis').insert([row]);
+            if (error) throw error;
+        } catch (e) {
+            console.error('Sauvegarde devis échouée', e);
+        }
+    }
+
+    // ======================================================
+    //  ACTIONS (boutons PDF)
+    // ======================================================
+    if (genPdfBtn) {
+        genPdfBtn.addEventListener('click', async () => {
+            if (!devisData) return;
+            genPdfBtn.disabled = true;
+            const original = genPdfBtn.textContent;
+            genPdfBtn.textContent = '⏳ Génération…';
+
+            const est = computeEstimate(devisData);
+            try {
+                generatedDoc = buildPdf(devisData, est);
+                await saveToSupabase(devisData, est);
+                const fileName = `devis-affichpub-${devisData.nom || 'client'}.pdf`.replace(/\s+/g, '-');
+                generatedDoc.save(fileName);
+                downloadPdfBtn.style.display = 'inline-flex';
+                genPdfBtn.textContent = '✅ Devis généré';
+            } catch (e) {
+                console.error(e);
+                genPdfBtn.textContent = original;
+                genPdfBtn.disabled = false;
+                addMessage('bot', "⚠️ La génération du PDF a échoué. Réessayez ou prenez rendez-vous avec un conseiller.");
             }
-        } else {
-            recos.push('Nous recommandons une approche visuelle épurée avec des contrastes élevés pour maximiser l\'impact sur l\'emplacement choisi.');
-            recos.push('L\'utilisation de matériaux premium (papier couché, finition mate) est préconisée pour le support print.');
-        }
-
-        if (regularite === 'bi-hebdomadaire') {
-            recos.push('La fréquence bi-hebdomadaire offre un excellent équilibre entre présence et budget, idéal pour maintenir un flux de communication constant.');
-        }
-
-        if (description.length > 100) {
-            recos.push('Votre brief détaillé nous permet de proposer une stratégie très ciblée, en phase avec vos objectifs.');
-        }
-
-        return recos.join(' ');
-    }
-
-    // ---------- Copy to clipboard ----------
-    const copyBtn = document.getElementById('copyBtn');
-    if (copyBtn) {
-        copyBtn.addEventListener('click', () => {
-            const nom = document.getElementById('resultNom').textContent;
-            const tel = document.getElementById('resultTel').textContent;
-            const format = document.getElementById('resultFormat').textContent;
-            const emp = document.getElementById('resultEmplacement').textContent;
-            const budget = document.getElementById('resultBudget').textContent;
-            const objet = document.getElementById('resultObjet').textContent;
-            const desc = document.getElementById('resultDescription').textContent;
-            const recos = document.getElementById('resultRecos').textContent;
-
-            const plainText = `
-📄 RÉSUMÉ DE VOTRE DEVIS — AFFICH'PUB
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-👤 COORDONNÉES
-Nom : ${nom}
-Tél : ${tel}
-
-⚙️ CONFIGURATION
-Format : ${format}
-Emplacement : ${emp}
-Budget : ${budget}
-
-📝 PROJET
-Objet : ${objet}
-${desc}
-
-✨ NOS RECOMMANDATIONS
-${recos}
-
-🚀 NOS ENGAGEMENTS
-• Conseiller disponible 24h/7j
-• Pub certifiée droit d'auteur
-• Emplacement stratégique
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-© 2024 AFFICH'PUB — L'AGENCE DE DEMAIN
-            `.trim();
-
-            navigator.clipboard.writeText(plainText).then(() => {
-                const originalText = copyBtn.innerHTML;
-                copyBtn.innerHTML = '✅ Copié !';
-                copyBtn.style.borderColor = 'var(--accent)';
-                copyBtn.style.color = 'var(--accent)';
-                setTimeout(() => {
-                    copyBtn.innerHTML = originalText;
-                    copyBtn.style.borderColor = '';
-                    copyBtn.style.color = '';
-                }, 2000);
-            });
         });
     }
 
-    // ---------- PDF (print) ----------
-    const pdfBtn = document.getElementById('pdfBtn');
-    if (pdfBtn) {
-        pdfBtn.addEventListener('click', () => {
-            window.print();
+    if (downloadPdfBtn) {
+        downloadPdfBtn.addEventListener('click', () => {
+            if (!generatedDoc) return;
+            const fileName = `devis-affichpub-${(devisData && devisData.nom) || 'client'}.pdf`.replace(/\s+/g, '-');
+            generatedDoc.save(fileName);
         });
     }
 
+    // ======================================================
+    //  FORMULAIRE DE SAISIE
+    // ======================================================
+    formEl.addEventListener('submit', (e) => {
+        e.preventDefault();
+        sendUserMessage(inputEl.value);
+    });
+
+    // ======================================================
+    //  INIT — message d'accueil
+    // ======================================================
+    addMessage('bot', WELCOME);
+    history.push({ role: 'assistant', content: WELCOME });
+    inputEl.focus();
 });
-

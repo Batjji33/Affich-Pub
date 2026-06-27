@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration — Devis</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        .admin-nav {
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .admin-nav .nav-links a {
+            color: var(--accent);
+        }
+
+        .admin-badge {
+            background: var(--accent);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        /* ----- Auth gate ----- */
+        .auth-gate {
+            min-height: 70vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .auth-card .logo-icon {
+            display: inline-block;
+            width: 48px;
+            height: 48px;
+            background: var(--accent);
+            border-radius: var(--radius-sm);
+            padding: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .auth-error {
+            color: #ef4444;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 0.5rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        /* ----- Table ----- */
+        .devis-table-wrap {
+            overflow-x: auto;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+        }
+
+        table.devis-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 880px;
+        }
+
+        .devis-table th,
+        .devis-table td {
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 0.88rem;
+            border-bottom: 1px solid var(--surface-border);
+            white-space: nowrap;
+        }
+
+        .devis-table th {
+            color: var(--accent);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            letter-spacing: 0.5px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .devis-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .status-select {
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            padding: 6px 10px;
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+
+        .status-select.s-nouveau { border-color: #3b82f6; color: #93c5fd; }
+        .status-select.s-contacte { border-color: #f59e0b; color: #fcd34d; }
+        .status-select.s-converti { border-color: #10b981; color: #6ee7b7; }
+        .status-select.s-archive { border-color: #6b7280; color: #9ca3af; }
+
+        .row-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .icon-btn {
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--surface-border);
+            background: var(--surface);
+            color: var(--text);
+            font-size: 0.78rem;
+            transition: all var(--transition-fast);
+            white-space: nowrap;
+        }
+
+        .icon-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .table-empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        /* ----- Modal ----- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 2000;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal-box {
+            background: var(--surface);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 640px;
+            max-height: 88vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .modal-head h3 {
+            font-size: 1.05rem;
+        }
+
+        .modal-close {
+            font-size: 1.4rem;
+            line-height: 1;
+            color: var(--text-secondary);
+            padding: 4px 8px;
+        }
+
+        .modal-close:hover {
+            color: var(--text);
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .modal-body p {
+            margin-bottom: 10px;
+        }
+
+        .modal-loading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-secondary);
+        }
+
+        /* Mini-chat (création pub) */
+        .mini-chat {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 38vh;
+            overflow-y: auto;
+            margin-bottom: 12px;
+        }
+
+        .mini-bubble {
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            font-size: 0.85rem;
+            line-height: 1.45;
+        }
+
+        .mini-bubble.bot {
+            align-self: flex-start;
+            background: var(--surface-light);
+            border: 1px solid var(--surface-border);
+        }
+
+        .mini-bubble.user {
+            align-self: flex-end;
+            background: var(--accent);
+            color: #000;
+            font-weight: 500;
+        }
+
+        .mini-input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .mini-input-row input {
+            flex: 1;
+            background: var(--surface-light);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--radius-full);
+            padding: 10px 16px;
+            color: var(--text);
+        }
+
+        .mini-input-row input:focus {
+            border-color: var(--accent);
+        }
+
+        .gen-image-wrap {
+            margin-top: 14px;
+            text-align: center;
+        }
+
+        .gen-image-wrap img {
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            margin: 0 auto 12px;
+            max-width: 100%;
+        }
+
+        .gen-error {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: #fcd34d;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ===== NAVIGATION (ADMIN) ===== -->
+    <nav class="navbar admin-nav" id="navbar">
+        <div class="container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                        <path d="M12 2L2 22h20L12 2z" />
+                    </svg>
+                </span>
+                AFFICH'PUB <span class="admin-badge">DIRECTEUR</span>
+            </a>
+            <div class="nav-links" id="navLinks">
+                <a href="admin_rdv.html">Gérer les RDV</a>
+                <a href="admin_contact.html">Gérer les Horaires</a>
+                <a href="admin_devis.html" class="active">Gérer les Devis</a>
+                <a href="#" id="logoutBtn" style="color:#ef4444;">Déconnexion</a>
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ===== AUTH GATE ===== -->
+    <div id="authGate" class="auth-gate" style="display:none;">
+        <div class="glass-card auth-card">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                    <path d="M12 2L2 22h20L12 2z" />
+                </svg>
+            </div>
+            <h2>Accès <span class="accent-text">Devis</span></h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Connexion sécurisée requise pour consulter les
+                devis clients.</p>
+            <form id="authForm" class="login-form" style="margin-top:1.5rem; text-align:left;">
+                <div class="form-group mb-2">
+                    <label for="authEmail">Email</label>
+                    <input type="email" id="authEmail" required autocomplete="username">
+                </div>
+                <div class="form-group mb-2">
+                    <label for="authPassword">Mot de passe</label>
+                    <input type="password" id="authPassword" required autocomplete="current-password">
+                </div>
+                <div id="authError" class="auth-error">Identifiants incorrects.</div>
+                <button type="submit" class="btn btn-primary btn-full" style="margin-top:1.2rem;">Se connecter</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== ADMIN CONTENT ===== -->
+    <div id="adminContent" style="display:none;">
+        <section class="page-hero" style="padding: 120px 0 40px;">
+            <div class="container">
+                <h1>Gestion des <span class="accent-text">Devis</span></h1>
+                <p>Tous les devis générés par le chatbot IA, triés du plus récent au plus ancien.</p>
+            </div>
+        </section>
+
+        <section style="padding-top:0;">
+            <div class="container">
+                <div class="devis-table-wrap">
+                    <table class="devis-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Nom</th>
+                                <th>Prénom</th>
+                                <th>Téléphone</th>
+                                <th>Emplacement</th>
+                                <th>Budget</th>
+                                <th>Statut</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devisTableBody">
+                            <tr>
+                                <td colspan="8" class="table-empty">Chargement…</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ===== MODAL GÉNÉRIQUE (analyse / infos) ===== -->
+    <div class="modal-overlay" id="infoModal">
+        <div class="modal-box">
+            <div class="modal-head">
+                <h3 id="infoModalTitle">Analyse IA</h3>
+                <button class="modal-close" data-close="infoModal">&times;</button>
+            </div>
+            <div class="modal-body" id="infoModalBody"></div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL CRÉATION PUB ===== -->
+    <div class="modal-overlay" id="pubModal">
+        <div class="modal-box">
+            <div class="modal-head">
+                <h3>🎨 Créer la publicité</h3>
+                <button class="modal-close" data-close="pubModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="mini-chat" id="pubChat"></div>
+                <div class="mini-input-row" id="pubInputRow">
+                    <input type="text" id="pubInput" placeholder="Votre réponse…" autocomplete="off">
+                    <button class="btn btn-primary btn-sm" id="pubSend">Envoyer</button>
+                </div>
+                <div id="pubGenZone"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script src="js/admin_devis.js"></script>
+</body>
+
+</html>
