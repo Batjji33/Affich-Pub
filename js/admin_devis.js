@@ -552,57 +552,144 @@ TEXTE_PRINCIPAL:
         if (parsed) {
             const { intro, adPrompt, texte } = parsed;
             if (intro) pubAddBubble('bot', intro);
-            pubAddBubble('bot', "✅ Concept finalisé ! Vous pouvez générer le visuel.");
+            pubAddBubble('bot', "✅ Concept finalisé ! Voici le prompt prêt à coller dans une autre IA. Vous pouvez le modifier librement, ou générer l'image directement ici.");
             pubInputRow.style.display = 'none';
-            showGenerateButton(adPrompt, texte);
+            showPromptResult(adPrompt, texte);
         } else {
             pubAddBubble('bot', reply);
             pubSetEnabled(true);
         }
     }
 
-    function showGenerateButton(adPrompt, texteOverlay) {
-        pubGenZone.innerHTML = '';
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-primary btn-full';
-        btn.textContent = '🖼️ Générer le visuel';
-        btn.addEventListener('click', () => generateVisual(adPrompt, texteOverlay, btn));
-        pubGenZone.appendChild(btn);
+    // Construit le prompt complet à copier (visuel + consigne de texte si slogan).
+    function buildCopyPrompt(visual, slogan) {
+        let p = (visual || '').trim();
+        if (slogan && slogan.trim()) {
+            p += `\n\nInclude this exact text, large and clearly legible: "${slogan.trim()}".`;
+        }
+        return p;
+    }
 
-        // Aperçu du prompt (repliable)
-        const small = document.createElement('p');
-        small.style.cssText = 'font-size:0.75rem;color:var(--text-muted);margin-top:8px;';
-        small.textContent = 'Prompt : ' + adPrompt +
-            (texteOverlay ? ` | Texte superposé : « ${texteOverlay} »` : '');
-        pubGenZone.appendChild(small);
+    function copyToClipboard(text, btn) {
+        const done = () => {
+            const orig = btn.dataset.label || btn.textContent;
+            btn.dataset.label = orig;
+            btn.textContent = '✅ Copié !';
+            setTimeout(() => { btn.textContent = orig; }, 1800);
+        };
+        const fallback = () => {
+            const t = document.createElement('textarea');
+            t.value = text;
+            t.style.position = 'fixed';
+            t.style.opacity = '0';
+            document.body.appendChild(t);
+            t.select();
+            try { document.execCommand('copy'); done(); }
+            catch (e) { alert('Copie impossible — sélectionnez le texte manuellement.'); }
+            document.body.removeChild(t);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(fallback);
+        } else {
+            fallback();
+        }
+    }
+
+    // Résultat principal : le prompt éditable + copie + (option) génération directe.
+    function showPromptResult(adPrompt, texteOverlay) {
+        pubGenZone.innerHTML = '';
+
+        const box = document.createElement('div');
+        box.className = 'pub-prompt-box';
+
+        const lab = document.createElement('label');
+        lab.className = 'pub-prompt-label';
+        lab.textContent = '📝 Prompt (modifiable) — à coller dans une autre IA (Midjourney, DALL·E, ChatGPT…)';
+        box.appendChild(lab);
+
+        const ta = document.createElement('textarea');
+        ta.className = 'pub-prompt-textarea';
+        ta.rows = 5;
+        ta.value = adPrompt || '';
+        box.appendChild(ta);
+
+        const slabel = document.createElement('label');
+        slabel.className = 'pub-prompt-label';
+        slabel.textContent = '🅰️ Texte / slogan à intégrer (optionnel)';
+        box.appendChild(slabel);
+
+        const sloganInput = document.createElement('input');
+        sloganInput.type = 'text';
+        sloganInput.className = 'pub-prompt-input';
+        sloganInput.value = texteOverlay || '';
+        box.appendChild(sloganInput);
+
+        const actions = document.createElement('div');
+        actions.className = 'pub-prompt-actions';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn btn-primary';
+        copyBtn.textContent = '📋 Copier le prompt';
+        copyBtn.addEventListener('click', () => copyToClipboard(buildCopyPrompt(ta.value, sloganInput.value), copyBtn));
+        actions.appendChild(copyBtn);
+
+        const genBtn = document.createElement('button');
+        genBtn.className = 'btn btn-outline';
+        genBtn.textContent = "🖼️ Générer l'image ici";
+        genBtn.addEventListener('click', () => generateVisual(ta.value.trim(), sloganInput.value.trim(), genBtn));
+        actions.appendChild(genBtn);
+
+        box.appendChild(actions);
+
+        const hint = document.createElement('p');
+        hint.style.cssText = 'font-size:0.75rem;color:var(--text-muted);margin-top:8px;';
+        hint.textContent = "Le prompt décrit le visuel. Le texte/slogan est ajouté à la fin du prompt copié, et superposé proprement si vous générez l'image ici.";
+        box.appendChild(hint);
+
+        pubGenZone.appendChild(box);
+    }
+
+    // Sous-zone dédiée au résultat de génération (laisse le prompt visible au-dessus).
+    function genResultZone() {
+        let z = document.getElementById('pubGenResult');
+        if (!z) {
+            z = document.createElement('div');
+            z.id = 'pubGenResult';
+            z.style.marginTop = '14px';
+            pubGenZone.appendChild(z);
+        }
+        return z;
     }
 
     async function generateVisual(adPrompt, texteOverlay, btn) {
+        if (!adPrompt) { alert('Le prompt est vide.'); return; }
+        const origLabel = btn.textContent;
         btn.disabled = true;
-        btn.textContent = '⏳ Génération en cours (30–60s)…';
+        btn.textContent = '⏳ Génération… (30–60s)';
 
-        const info = document.createElement('p');
-        info.style.cssText = 'font-size:0.8rem;color:var(--text-secondary);margin-top:8px;';
-        info.textContent = 'La génération gratuite peut prendre 30 à 60 secondes. Merci de patienter…';
-        pubGenZone.appendChild(info);
+        const zone = genResultZone();
+        zone.innerHTML = `<p style="font-size:0.8rem;color:var(--text-secondary);">La génération gratuite peut prendre 30 à 60 secondes. Merci de patienter…</p>`;
 
         try {
             const { image, mimeType } = await callGenAd(adPrompt);
             const dataUrl = `data:${mimeType};base64,${image}`;
-            renderGeneratedImage(dataUrl, texteOverlay);
+            renderGeneratedImage(dataUrl, texteOverlay, zone);
         } catch (err) {
-            pubGenZone.innerHTML = `
+            zone.innerHTML = `
                 <div class="gen-error">
                     ⚠️ ${escapeHtml(err.message)}<br><br>
                     Le service de génération gratuit est temporairement indisponible ou surchargé.
-                    Réessayez dans une minute, ou créez le visuel avec un outil comme
-                    <strong>Canva</strong> ou <strong>Adobe Express</strong>.
+                    Réessayez dans une minute, ou collez le prompt ci-dessus dans un autre outil
+                    (<strong>Canva</strong>, <strong>Adobe Express</strong>, <strong>ChatGPT</strong>…).
                 </div>`;
             const retry = document.createElement('button');
             retry.className = 'btn btn-outline btn-full mt-2';
             retry.textContent = '🔄 Réessayer';
             retry.addEventListener('click', () => generateVisual(adPrompt, texteOverlay, retry));
-            pubGenZone.appendChild(retry);
+            zone.appendChild(retry);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = origLabel;
         }
     }
 
@@ -658,8 +745,9 @@ TEXTE_PRINCIPAL:
         ctx.shadowBlur = 0;
     }
 
-    function renderGeneratedImage(dataUrl, texteOverlay) {
-        pubGenZone.innerHTML = '';
+    function renderGeneratedImage(dataUrl, texteOverlay, zone) {
+        const target = zone || pubGenZone;
+        target.innerHTML = '';
         const wrap = document.createElement('div');
         wrap.className = 'gen-image-wrap';
 
@@ -699,7 +787,7 @@ TEXTE_PRINCIPAL:
         };
         img.src = dataUrl;
 
-        pubGenZone.appendChild(wrap);
+        target.appendChild(wrap);
     }
     pubSend.addEventListener('click', pubSendMessage);
     pubInput.addEventListener('keydown', (e) => {
