@@ -275,11 +275,38 @@ document.addEventListener('DOMContentLoaded', () => {
         wrap.appendChild(mkBtn('🔍 Analyser', 'Analyser ce devis par IA', () => analyzeDevis(d)));
         wrap.appendChild(mkBtn('📄 Devis', 'Générer le vrai devis (PDF)', (e) => generateRealDevis(d, e.currentTarget)));
         wrap.appendChild(mkBtn('🎨 Pub', 'Créer la publicité', () => openPubCreator(d)));
+        const delBtn = mkBtn('🗑️ Supprimer', 'Supprimer définitivement ce devis', () => deleteDevis(d, tr, delBtn));
+        delBtn.classList.add('icon-btn-danger');
+        wrap.appendChild(delBtn);
 
         actTd.appendChild(wrap);
         tr.appendChild(actTd);
 
         return tr;
+    }
+
+    async function deleteDevis(d, tr, btn) {
+        const confirmed = confirm(
+            `Supprimer définitivement le devis de ${d.prenom} ${d.nom} ?\n\nCette action est irréversible.`
+        );
+        if (!confirmed) return;
+
+        btn.disabled = true;
+        btn.textContent = '⏳…';
+
+        const { error } = await supabase.from('devis').delete().eq('id', d.id);
+
+        if (error) {
+            alert('Erreur lors de la suppression : ' + error.message);
+            btn.disabled = false;
+            btn.textContent = '🗑️ Supprimer';
+            return;
+        }
+
+        tr.remove();
+        if (!tableBody.querySelector('tr')) {
+            tableBody.innerHTML = `<tr><td colspan="8" class="table-empty">Aucun devis pour le moment.</td></tr>`;
+        }
     }
 
     async function updateStatus(id, statut, sel) {
