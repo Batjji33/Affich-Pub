@@ -2339,6 +2339,48 @@ input[type=range]::-moz-range-thumb {
   transform: translateY(-1px);
 }
 
+/* Suggestions enrichies (blocs avec icône + description) */
+.chat-quick-replies.blocks {
+  gap: 10px;
+}
+
+.choice-block {
+  flex: 1 1 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-light);
+  transition: all var(--transition-fast);
+}
+
+.choice-block:hover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  transform: translateY(-2px);
+}
+
+.choice-block .cb-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.choice-block .cb-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.choice-block .cb-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 /* Actions (devis complet) */
 .chat-actions {
   display: flex;

@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `Objet de la publicité : ${d.objet_pub ?? '—'}`,
             `Description : ${d.description_pub ?? '—'}`,
             `Budget : ${d.budget ?? '—'} €`,
-            `Régularité : ${d.regularite ?? '—'}`,
+            `Régularité d'entretien : ${d.regularite ?? '—'}`,
             `Emplacement : ${d.emplacement ?? '—'}`,
             `Période : du ${d.date_debut ?? '—'} au ${d.date_fin ?? '—'}`,
             `Prix estimé (interne) : ${d.prix_estime ?? '—'} €`
