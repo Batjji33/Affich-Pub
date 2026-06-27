@@ -79,11 +79,20 @@ supabase/functions/_shared/cors.ts   En-têtes CORS partagés
 ## Estimation tarifaire (calcul côté client)
 
 ```js
-prixBase   = { decouverte: 150, standard: 300, premium: 600 }
-multReg    = { quotidienne: 1.5, bihebdomadaire: 1.0 }
+// € par publicité et par semaine, selon l'emplacement
+basePPW    = { decouverte: 30, standard: 50, premium: 85 }
+formatMult = { manuel: 1.0, informatique: 1.25 }   // informatique plus cher
+regMult    = { quotidienne: 1.4, bihebdomadaire: 1.0 } // quotidien plus cher
 semaines   = max(1, ceil((dateFin - dateDebut) / 1 semaine))
-prixEstime = prixBase[emplacement] * multReg[regularite] * semaines
+sumBase    = somme de basePPW[emplacement] pour chaque publicité (quantité)
+prixEstime = round(sumBase * semaines * formatMult * regMult)
+prixEstime = clamp(prixEstime, 50, 500)   // plancher 50 €, plafond 500 €
 ```
+
+> Une **barrière de validation côté client** (js/devis.js) vérifie toutes les
+> informations avant de finaliser, et le client doit **confirmer explicitement**
+> avant la génération (après quoi la conversation est clôturée). La date de début
+> doit être au moins **7 jours** après aujourd'hui (délai de livraison).
 
 ## Points d'attention
 

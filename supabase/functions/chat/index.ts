@@ -38,7 +38,9 @@ Deno.serve(async (req) => {
           model: mdl,
           messages: finalMessages,
           temperature: 0.5,
-          max_tokens: 1024,
+          // Réponses courtes (questions / JSON final) → on limite les tokens pour
+          // consommer moins et atteindre la limite de débit (rate limit) moins vite.
+          max_tokens: 768,
         }),
       });
 

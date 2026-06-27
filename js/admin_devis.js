@@ -151,6 +151,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return s ? s.charAt(0).toUpperCase() + s.slice(1) : '—';
     }
 
+    function emplacementsText(d) {
+        if (Array.isArray(d.emplacements) && d.emplacements.length) {
+            const counts = {};
+            d.emplacements.forEach(e => { counts[e] = (counts[e] || 0) + 1; });
+            return Object.keys(counts).map(k => `${counts[k]} ${cap(k)}`).join(', ');
+        }
+        return cap(d.emplacement);
+    }
+
     function devisToText(d) {
         return [
             `Nom : ${d.nom}`,
@@ -161,11 +170,34 @@ document.addEventListener('DOMContentLoaded', () => {
             `Objet de la publicité : ${d.objet_pub ?? '—'}`,
             `Description : ${d.description_pub ?? '—'}`,
             `Budget : ${d.budget ?? '—'} €`,
+            `Quantité de publicités : ${d.quantite ?? 1} (visuel identique)`,
+            `Emplacements : ${emplacementsText(d)}`,
             `Régularité d'entretien : ${d.regularite ?? '—'}`,
-            `Emplacement : ${d.emplacement ?? '—'}`,
             `Période : du ${d.date_debut ?? '—'} au ${d.date_fin ?? '—'}`,
             `Prix estimé (interne) : ${d.prix_estime ?? '—'} €`
         ].join('\n');
+    }
+
+    // Transcription lisible de la conversation (pour l'analyse IA).
+    function conversationToText(d) {
+        const msgs = d && d.conversation && Array.isArray(d.conversation.messages)
+            ? d.conversation.messages
+            : [];
+        if (!msgs.length) return '(Aucune conversation enregistrée.)';
+        return msgs
+            .filter(m => m && m.content)
+            // On retire les consignes techniques internes injectées au modèle.
+            .filter(m => !String(m.content).startsWith('[VALIDATION SYSTÈME'))
+            .map(m => {
+                let content = String(m.content);
+                // On masque le JSON technique de fin de devis.
+                if (content.includes('DEVIS_COMPLET')) {
+                    content = content.split('DEVIS_COMPLET')[0].trim() || '(devis finalisé)';
+                }
+                const who = m.role === 'user' ? 'Client' : 'Assistant';
+                return `${who} : ${content}`;
+            })
+            .join('\n');
     }
 
     // ======================================================
@@ -207,7 +239,8 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.appendChild(td(escapeHtml(d.nom)));
         tr.appendChild(td(escapeHtml(d.prenom)));
         tr.appendChild(td(escapeHtml(d.telephone || '—')));
-        tr.appendChild(td(cap(d.emplacement)));
+        const qte = d.quantite && d.quantite > 1 ? `${d.quantite}× ` : '';
+        tr.appendChild(td(escapeHtml(qte + emplacementsText(d))));
         tr.appendChild(td(d.budget != null ? `${d.budget} €` : '—'));
 
         // Statut (sélecteur)
@@ -273,7 +306,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // ======================================================
     //  ACTION 1 — ANALYSER PAR IA
     // ======================================================
-    const ANALYSE_PROMPT = `Tu es un consultant expert en publicité. Analyse ce devis et fournis un compte rendu structuré incluant : profil client, objet et description de la publicité, besoins identifiés, points de vigilance (budget, description vague, dates), recommandations pour optimiser la campagne, et un score de qualité du devis sur 10.`;
+    const ANALYSE_PROMPT = `Tu es un consultant expert en publicité. On te fournit les informations d'un devis ET la transcription de la conversation entre le client et l'assistant. Fournis un compte rendu clair et structuré, avec ces sections :
+
+1. Profil client
+2. Objet et description de la publicité (besoins identifiés)
+3. Compte rendu du déroulement de la conversation : est-ce que l'échange s'est bien ou mal passé ? Le client a-t-il hésité, été confus, mécontent, pressé ? Y a-t-il eu des blocages, des incompréhensions, des tentatives de fausses informations ou de manipulation de l'assistant ? Des points positifs (client motivé, réponses claires) ?
+4. Points de vigilance (budget, description vague, dates, cohérence)
+5. Recommandations pour optimiser la campagne et pour le suivi commercial (ce que le conseiller devrait préparer / aborder lors du RDV)
+6. Score de qualité du devis sur 10
+
+Sois concret et utile pour le conseiller qui rappellera le client.`;
 
     async function analyzeDevis(d) {
         document.getElementById('infoModalTitle').textContent = `Analyse IA — ${d.prenom} ${d.nom}`;
@@ -282,8 +324,11 @@ document.addEventListener('DOMContentLoaded', () => {
         openModal('infoModal');
 
         try {
+            const userMsg =
+                "=== INFORMATIONS DU DEVIS ===\n" + devisToText(d) +
+                "\n\n=== TRANSCRIPTION DE LA CONVERSATION ===\n" + conversationToText(d);
             const result = await callChatFn(
-                [{ role: 'user', content: devisToText(d) }],
+                [{ role: 'user', content: userMsg }],
                 ANALYSE_PROMPT
             );
             body.innerHTML = formatRich(result);
@@ -295,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ======================================================
     //  ACTION 2 — GÉNÉRER LE VRAI DEVIS (PDF)
     // ======================================================
-    const VRAI_DEVIS_PROMPT = `Tu es l'assistant administratif d'Affich'Pub. À partir des informations et des montants fournis, rédige un devis professionnel complet, en texte clair et structuré (sans markdown, sans astérisques), prêt à être imprimé. Inclure dans cet ordre : un numéro de devis, la date du jour, les coordonnées du client, le détail des prestations (emplacement, régularité, format de diffusion, période, durée), puis le récapitulatif financier avec Prix HT, TVA 20% et Prix TTC, les conditions de règlement, et la mention "Devis valable 30 jours". Utilise exactement les montants fournis.`;
+    const VRAI_DEVIS_PROMPT = `Tu es l'assistant administratif d'Affich'Pub. À partir des informations et des montants fournis, rédige un devis professionnel complet, en texte clair et structuré (sans markdown, sans astérisques), prêt à être imprimé. Inclure dans cet ordre : un numéro de devis, la date du jour, les coordonnées du client, le détail des prestations (nombre de publicités et emplacement de chacune, régularité d'entretien, format de diffusion, période, durée), puis le récapitulatif financier avec Prix HT, TVA 20% et Prix TTC, les conditions de règlement, et la mention "Devis valable 30 jours". Utilise exactement les montants fournis.`;
 
     async function generateRealDevis(d, btn) {
         const original = btn.textContent;

@@ -15,7 +15,9 @@ CREATE TABLE IF NOT EXISTS devis (
   description_pub  TEXT,
   budget           NUMERIC,
   regularite       TEXT CHECK (regularite IN ('quotidienne', 'bihebdomadaire')),
-  emplacement      TEXT CHECK (emplacement IN ('decouverte', 'standard', 'premium')),
+  emplacement      TEXT CHECK (emplacement IN ('decouverte', 'standard', 'premium')), -- emplacement "principal" (résumé)
+  quantite         INTEGER DEFAULT 1, -- nombre de publicités (visuel identique)
+  emplacements     JSONB,             -- emplacement de chaque publicité : ["standard","premium",...]
   date_debut       DATE,
   date_fin         DATE,
   prix_estime      NUMERIC,
@@ -26,6 +28,13 @@ CREATE TABLE IF NOT EXISTS devis (
 
 CREATE INDEX IF NOT EXISTS devis_created_at_idx ON devis (created_at DESC);
 CREATE INDEX IF NOT EXISTS devis_statut_idx     ON devis (statut);
+
+-- ------------------------------------------------------------
+--  Migration : si la table existe déjà (ancienne version),
+--  ajoute les colonnes "quantité" et "emplacements".
+-- ------------------------------------------------------------
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS quantite     INTEGER DEFAULT 1;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS emplacements JSONB;
 
 -- ------------------------------------------------------------
 --  Row Level Security
