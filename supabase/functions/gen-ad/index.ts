@@ -5,8 +5,10 @@
 // ============================================================
 import { corsHeaders } from "../_shared/cors.ts";
 
+// Hugging Face a décommissionné l'ancien domaine "api-inference.huggingface.co"
+// au profit du nouveau système de routage "Inference Providers".
 const HF_URL =
-  "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell";
+  "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell";
 
 // Encode un ArrayBuffer en base64 par paquets (évite le dépassement de pile)
 function toBase64(buffer: ArrayBuffer): string {
