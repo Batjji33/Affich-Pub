@@ -95,6 +95,21 @@ DEVIS_COMPLET
         }
     }
 
+    // Un F5 / rechargement doit repartir de zéro ; seule une navigation vers
+    // une autre page puis un retour (lien, bouton précédent) doit conserver la conversation.
+    function isPageReload() {
+        try {
+            const entries = performance.getEntriesByType('navigation');
+            if (entries && entries.length > 0) return entries[0].type === 'reload';
+            if (performance.navigation) return performance.navigation.type === performance.navigation.TYPE_RELOAD;
+        } catch (e) { /* ignore */ }
+        return false;
+    }
+
+    if (isPageReload()) {
+        localStorage.removeItem(STORAGE_KEY);
+    }
+
     // Message d'accueil (affiché + ajouté à l'historique comme 1er tour assistant)
     const WELCOME = "Bonjour 👋 Je suis l'assistant Affich'Pub. Je vais vous aider à construire votre devis publicitaire en quelques minutes.\n\nPour commencer, quel est votre **nom et prénom** ?";
 
