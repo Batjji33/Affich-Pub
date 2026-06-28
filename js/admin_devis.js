@@ -190,13 +190,18 @@ document.addEventListener('DOMContentLoaded', () => {
             .filter(m => !String(m.content).startsWith('[VALIDATION SYSTÈME'))
             .map(m => {
                 let content = String(m.content);
-                // On masque le JSON technique de fin de devis.
+                // On retire le bloc technique d'état (###ETAT###{...}).
+                const ei = content.indexOf('###ETAT###');
+                if (ei !== -1) content = content.slice(0, ei).trim();
+                // Compat. ancienne version : on masque le JSON de fin de devis.
                 if (content.includes('DEVIS_COMPLET')) {
                     content = content.split('DEVIS_COMPLET')[0].trim() || '(devis finalisé)';
                 }
+                if (!content) return '';
                 const who = m.role === 'user' ? 'Client' : 'Assistant';
                 return `${who} : ${content}`;
             })
+            .filter(Boolean)
             .join('\n');
     }
 
