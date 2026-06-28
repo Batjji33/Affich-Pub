@@ -49,8 +49,8 @@ Tu dois collecter les informations dans CET ordre précis :
    S'il y a plusieurs publicités, demande l'emplacement pour chacune (elles peuvent être différentes). Suggère une répartition adaptée au budget, mais demande toujours validation.
 9. Format : "manuel" (livraison physique sous 7 jours) ou "informatique" (diffusion numérique sous 7 jours ou pendant les vacances scolaires). En fonction du budget indiqué, SUGGÈRE le format le plus adapté, puis demande validation.
 10. Régularité d'entretien : "quotidienne" ou "bi-hebdomadaire" (fréquence d'entretien de l'affichage, jamais appeler cela "diffusion"). En fonction du budget, SUGGÈRE la régularité la plus adaptée (quotidienne = plus soignée mais plus chère), puis demande validation.
-11. Date de début (JJ/MM/AAAA) — IMPORTANT : à cause du délai de livraison/préparation, la publicité ne peut pas commencer avant 7 jours à partir d'aujourd'hui. Refuse toute date de début à moins de 7 jours et explique-le gentiment.
-12. Date de fin (JJ/MM/AAAA, au maximum 1 mois après la date de début)
+11. Date de début (JJ/MM/AAAA) — IMPORTANT : à cause du délai de livraison/préparation, la publicité ne peut pas commencer avant 7 jours à partir d'aujourd'hui. Si le client propose une date trop proche, explique-le gentiment et propose la date de début la plus proche autorisée (fournie dans la section « RÉFÉRENCE DE DATES » plus bas). Si le client donne un jour de semaine plutôt qu'une date, utilise OBLIGATOIREMENT la section « RÉFÉRENCE DE DATES » pour la convertir — ne calcule jamais une date toi-même
+12. Date de fin (JJ/MM/AAAA, au maximum 1 mois après la date de début) — même règle : si un jour de semaine est donné, convertis-le via la « RÉFÉRENCE DE DATES »
 
 Règles générales :
 - UNE seule question à la fois
@@ -59,7 +59,7 @@ Règles générales :
 - Dès que tu connais le prénom du client, adresse-toi à lui par son **prénom seul** (jamais nom + prénom, jamais "Monsieur/Madame") dans tous tes messages suivants, de façon naturelle et amicale
 - Si une information donnée est manifestement fausse, fantaisiste ou une blague — un nom, un prénom, un objet de pub, une description... (ex : "test", "toto", "tata", "essai", "caca", "xxx", "azerty", "blabla", "rien", une suite de lettres aléatoires, etc.) — explique avec bienveillance que tu as besoin d'une vraie information pour établir un devis sérieux, et redemande-la
 - N'impose et ne mentionne aucune limite d'âge minimale ou maximale : accepte tout âge indiqué tel quel, sans le remettre en question
-- Si une information est invalide (téléphone incorrect, date de début à moins de 7 jours, écart > 1 mois), explique pourquoi avec douceur et redemande
+- Si une information est invalide (téléphone incorrect, date de début à moins de 7 jours, écart > 1 mois), explique pourquoi avec douceur et redemande. Pour les dates, vérifie TOUJOURS d'abord par rapport à la section « RÉFÉRENCE DE DATES » avant de dire qu'une date est invalide
 - Si la description est vague, relance avec des questions précises pour aider le client à préciser son besoin
 - Si le client dit qu'il donnera une information « plus tard » ou refuse de répondre, explique-lui avec bienveillance que cette information est indispensable pour établir le devis, et redemande-la. Ne passe pas à la suite sans elle
 - Toujours demander validation avant d'intégrer une suggestion
@@ -467,7 +467,16 @@ Règles pour ce bloc :
         const obtained = FIELD_CHECKS.filter(f => f.ok(collected)).map(f => f.label);
         const missing = FIELD_CHECKS.filter(f => !f.ok(collected)).map(f => f.label);
 
-        let s = '\n\n=== ÉTAT DU DEVIS (calculé par le système — fais-y strictement confiance) ===\n';
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const minDebut = new Date(today); minDebut.setDate(minDebut.getDate() + DELAI_LIVRAISON_JOURS);
+
+        let s = '\n\n=== RÉFÉRENCE DE DATES (calculée par le système — fais-y une confiance ABSOLUE, ne calcule JAMAIS toi-même une date à partir d\'un jour de semaine) ===\n';
+        s += `Aujourd'hui : ${JOURS_FR[today.getDay()]} ${fmtFRDate(today)}. Date de début la plus proche autorisée : ${JOURS_FR[minDebut.getDay()]} ${fmtFRDate(minDebut)} (délai de ${DELAI_LIVRAISON_JOURS} jours).\n`;
+        s += `Correspondance jour de semaine → date pour les 5 prochaines semaines : ${buildDateReference(today)}.\n`;
+        s += "Quand le client exprime une date avec un jour de semaine (« mardi », « dimanche prochain », « de mardi à dimanche »…), retrouve la date exacte UNIQUEMENT dans cette liste ci-dessus — ne fais aucun calcul mental, ne déduis rien par toi-même.\n";
+        s += "Si l'interprétation est claire (un seul jour correspondant, ou expression explicite comme « mardi prochain », « dans 2 jours »), NE DEMANDE PAS de confirmation : annonce directement la date trouvée, par exemple « Ok, ce sera donc du mardi 30/06/2026 au dimanche 05/07/2026 ! ».\n";
+        s += "Si l'interprétation est réellement ambiguë (le jour cité pourrait correspondre à plusieurs dates selon le sens visé), demande confirmation en proposant explicitement les dates possibles, par exemple « Tu veux dire dimanche 05/07/2026 ou plutôt dimanche 12/07/2026 ? ».\n";
+        s += "Ne dis JAMAIS qu'une date donnée par le client est incorrecte ou invalide sans l'avoir d'abord comparée à cette référence de dates : si la date correspond à la référence, elle est correcte.\n";
         s += obtained.length
             ? 'Déjà obtenu (ne redemande PAS) : ' + obtained.join(', ') + '.\n'
             : "Aucune information obtenue pour l'instant.\n";
@@ -605,6 +614,28 @@ Règles pour ce bloc :
     function toISODate(d) {
         if (!d || isNaN(d)) return null;
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    // Formate une date en JJ/MM/AAAA (même format que celui demandé à l'IA).
+    function fmtFRDate(d) {
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    }
+
+    const JOURS_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+
+    // Construit une référence calendaire JOUR → DATE pour les ~5 prochaines semaines,
+    // afin que l'IA n'ait JAMAIS à calculer elle-même une date à partir d'un jour de
+    // semaine (calcul peu fiable côté modèle) : le code fait le calcul, l'IA ne fait
+    // que recopier la date trouvée dans cette liste.
+    function buildDateReference(today) {
+        const lines = [];
+        for (let i = 0; i <= 35; i++) {
+            const d = new Date(today);
+            d.setDate(d.getDate() + i);
+            const label = i === 0 ? "aujourd'hui" : i === 1 ? 'demain' : JOURS_FR[d.getDay()];
+            lines.push(`${label} ${fmtFRDate(d)}`);
+        }
+        return lines.join(', ');
     }
 
     function computeEstimate(d) {
