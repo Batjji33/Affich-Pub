@@ -93,6 +93,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // ======================================================
     //  APPELS EDGE FUNCTIONS
     // ======================================================
+    // L'API Groq renvoie parfois { error: { message, type, code } } (objet) au
+    // lieu d'une simple chaîne : on normalise pour toujours obtenir du texte lisible.
+    function errorMessageOf(data, status) {
+        const e = data && data.error;
+        if (!e) return `Erreur serveur (${status})`;
+        if (typeof e === 'string') return e;
+        if (typeof e === 'object' && e.message) return String(e.message);
+        return `Erreur serveur (${status})`;
+    }
+
     async function callChatFn(messages, system) {
         const res = await fetch(`${FN_BASE}/chat`, {
             method: 'POST',
@@ -104,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
             body: JSON.stringify({ system, messages, model: 'llama-3.3-70b-versatile' })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `Erreur serveur (${res.status})`);
+        if (!res.ok) throw new Error(errorMessageOf(data, res.status));
         return (data?.choices?.[0]?.message?.content || '').trim();
     }
 
@@ -119,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
             body: JSON.stringify({ prompt })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `Erreur serveur (${res.status})`);
+        if (!res.ok) throw new Error(errorMessageOf(data, res.status));
         return data; // { image, mimeType }
     }
 

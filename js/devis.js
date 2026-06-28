@@ -239,9 +239,19 @@ Règles pour ce bloc :
         return history.length > MAX_HISTORY_SENT ? history.slice(-MAX_HISTORY_SENT) : history;
     }
 
+    // L'API Groq renvoie parfois { error: { message, type, code } } (objet) au
+    // lieu d'une simple chaîne : on normalise pour toujours obtenir du texte lisible.
+    function errorMessageOf(data, status) {
+        const e = data && data.error;
+        if (!e) return `Erreur serveur (${status})`;
+        if (typeof e === 'string') return e;
+        if (typeof e === 'object' && e.message) return String(e.message);
+        return `Erreur serveur (${status})`;
+    }
+
     function isRateLimitError(status, data) {
         if (status === 429) return true;
-        const msg = ((data && data.error) || '').toString().toLowerCase();
+        const msg = errorMessageOf(data, status).toLowerCase();
         return msg.includes('rate limit') || msg.includes('rate_limit') ||
             msg.includes('too many requests') || msg.includes('quota');
     }
@@ -262,7 +272,7 @@ Règles pour ce bloc :
         });
         const data = await res.json();
         if (!res.ok) {
-            const err = new Error(data.error || `Erreur serveur (${res.status})`);
+            const err = new Error(errorMessageOf(data, res.status));
             if (isRateLimitError(res.status, data)) err.isRateLimit = true;
             throw err;
         }
