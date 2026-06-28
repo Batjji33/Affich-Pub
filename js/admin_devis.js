@@ -189,12 +189,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Transcription lisible de la conversation (pour l'analyse IA).
+    // Le modèle gratuit a une limite stricte de tokens par requête : on plafonne
+    // la longueur de la transcription pour ne pas dépasser le quota (sinon erreur
+    // « Request too large »). On garde en priorité la fin de l'échange (la plus
+    // utile pour juger du déroulement) en élaguant le début si nécessaire.
+    const MAX_TRANSCRIPT_CHARS = 8000;
     function conversationToText(d) {
         const msgs = d && d.conversation && Array.isArray(d.conversation.messages)
             ? d.conversation.messages
             : [];
         if (!msgs.length) return '(Aucune conversation enregistrée.)';
-        return msgs
+        const lines = msgs
             .filter(m => m && m.content)
             // On retire les consignes techniques internes injectées au modèle.
             .filter(m => !String(m.content).startsWith('[VALIDATION SYSTÈME'))
@@ -211,8 +216,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 const who = m.role === 'user' ? 'Client' : 'Assistant';
                 return `${who} : ${content}`;
             })
-            .filter(Boolean)
-            .join('\n');
+            .filter(Boolean);
+
+        // On assemble depuis la fin jusqu'à atteindre le budget de caractères.
+        const kept = [];
+        let total = 0;
+        for (let i = lines.length - 1; i >= 0; i--) {
+            const len = lines[i].length + 1;
+            if (total + len > MAX_TRANSCRIPT_CHARS && kept.length) break;
+            kept.unshift(lines[i]);
+            total += len;
+        }
+        if (kept.length < lines.length) {
+            kept.unshift('[…début de la conversation tronqué pour respecter la limite…]');
+        }
+        return kept.join('\n');
     }
 
     // ======================================================
