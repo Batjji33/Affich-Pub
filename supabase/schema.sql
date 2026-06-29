@@ -23,7 +23,9 @@ CREATE TABLE IF NOT EXISTS devis (
   prix_estime      NUMERIC,
   conversation     JSONB,
   statut           TEXT DEFAULT 'nouveau'
-                     CHECK (statut IN ('nouveau', 'contacte', 'converti', 'archive'))
+                     CHECK (statut IN ('nouveau', 'contacte', 'converti', 'archive')),
+  analyse_ia       TEXT,                       -- compte rendu IA mis en cache (ne se régénère pas à chaque ouverture)
+  analyse_ia_at    TIMESTAMP WITH TIME ZONE     -- date de la dernière génération de l'analyse
 );
 
 CREATE INDEX IF NOT EXISTS devis_created_at_idx ON devis (created_at DESC);
@@ -31,10 +33,12 @@ CREATE INDEX IF NOT EXISTS devis_statut_idx     ON devis (statut);
 
 -- ------------------------------------------------------------
 --  Migration : si la table existe déjà (ancienne version),
---  ajoute les colonnes "quantité" et "emplacements".
+--  ajoute les colonnes "quantité", "emplacements" et le cache d'analyse IA.
 -- ------------------------------------------------------------
-ALTER TABLE devis ADD COLUMN IF NOT EXISTS quantite     INTEGER DEFAULT 1;
-ALTER TABLE devis ADD COLUMN IF NOT EXISTS emplacements JSONB;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS quantite      INTEGER DEFAULT 1;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS emplacements  JSONB;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS analyse_ia    TEXT;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS analyse_ia_at TIMESTAMP WITH TIME ZONE;
 
 -- ------------------------------------------------------------
 --  Row Level Security

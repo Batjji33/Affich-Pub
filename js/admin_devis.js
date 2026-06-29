@@ -404,11 +404,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 Sois concret et utile pour le conseiller qui rappellera le client.`;
 
-    async function analyzeDevis(d) {
+    // L'analyse est mise en cache (en mémoire sur `d`, et persistée en base) :
+    // rouvrir la modale n'appelle PLUS l'IA — il faut cliquer explicitement sur
+    // « Régénérer » pour relancer une analyse (ex. devis modifié depuis).
+    async function analyzeDevis(d, force = false) {
         document.getElementById('infoModalTitle').textContent = `Analyse IA — ${d.prenom} ${d.nom}`;
         const body = document.getElementById('infoModalBody');
-        body.innerHTML = `<div class="modal-loading">⏳ Analyse en cours…</div>`;
         openModal('infoModal');
+
+        if (d.analyse_ia && !force) {
+            renderAnalysis(d, body);
+            return;
+        }
+
+        body.innerHTML = `<div class="modal-loading">⏳ Analyse en cours…</div>`;
 
         try {
             const userMsg =
@@ -418,10 +427,34 @@ Sois concret et utile pour le conseiller qui rappellera le client.`;
                 [{ role: 'user', content: userMsg }],
                 ANALYSE_PROMPT
             );
-            body.innerHTML = formatRich(result);
+            d.analyse_ia = result;
+            d.analyse_ia_at = new Date().toISOString();
+            renderAnalysis(d, body);
+
+            // Sauvegarde best-effort : si la migration (colonnes analyse_ia*)
+            // n'est pas encore appliquée, l'analyse reste affichée (juste pas
+            // persistée entre deux rechargements de la page).
+            const { error } = await supabase.from('devis')
+                .update({ analyse_ia: d.analyse_ia, analyse_ia_at: d.analyse_ia_at })
+                .eq('id', d.id);
+            if (error) console.error('Sauvegarde analyse IA échouée', error);
         } catch (err) {
             body.innerHTML = `<div class="gen-error">⚠️ ${escapeHtml(err.message)}</div>`;
         }
+    }
+
+    function renderAnalysis(d, body) {
+        body.innerHTML = '';
+
+        const content = document.createElement('div');
+        content.innerHTML = formatRich(d.analyse_ia);
+        body.appendChild(content);
+
+        const regenBtn = document.createElement('button');
+        regenBtn.className = 'btn btn-outline mt-2';
+        regenBtn.textContent = '🔄 Régénérer l\'analyse';
+        regenBtn.addEventListener('click', () => analyzeDevis(d, true));
+        body.appendChild(regenBtn);
     }
 
     // ======================================================
