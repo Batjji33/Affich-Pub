@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration — Avis</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .admin-nav {
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .admin-nav .nav-links a { color: var(--accent); }
+
+        .admin-badge {
+            background: var(--accent);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        /* ----- Auth gate ----- */
+        .auth-gate {
+            min-height: 70vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .auth-card .logo-icon {
+            display: inline-block;
+            width: 48px;
+            height: 48px;
+            background: var(--accent);
+            border-radius: var(--radius-sm);
+            padding: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .auth-error {
+            color: #ef4444;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 0.5rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        /* ----- Sections ----- */
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 18px;
+        }
+
+        .panel {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 40px;
+        }
+
+        /* ----- Générateur de codes ----- */
+        .code-gen-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .code-gen-row .form-group { flex: 1 1 240px; }
+
+        .codes-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .code-chip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+        }
+
+        .code-chip.used { opacity: 0.55; }
+
+        .code-chip .code-val {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: 0.25rem;
+            color: var(--accent);
+        }
+
+        .code-chip .code-meta {
+            flex: 1;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .code-chip .code-status {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: var(--radius-full);
+        }
+
+        .code-status.free { color: #6ee7b7; background: rgba(16, 185, 129, 0.12); }
+        .code-status.used { color: #9ca3af; background: rgba(156, 163, 175, 0.12); }
+
+        /* ----- Table avis ----- */
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+        }
+
+        table.adm-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 760px;
+        }
+
+        .adm-table th,
+        .adm-table td {
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 0.88rem;
+            border-bottom: 1px solid var(--surface-border);
+            vertical-align: top;
+        }
+
+        .adm-table th {
+            color: var(--accent);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            letter-spacing: 0.5px;
+            background: rgba(255, 255, 255, 0.02);
+            white-space: nowrap;
+        }
+
+        .adm-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+
+        .extrait { color: var(--text-secondary); max-width: 360px; }
+        .extrait strong { color: var(--text); display: block; margin-bottom: 2px; }
+
+        .stars-mini { color: var(--accent); letter-spacing: 1px; white-space: nowrap; }
+
+        .pill {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 3px 9px;
+            border-radius: var(--radius-full);
+            white-space: nowrap;
+        }
+
+        .pill.visible { color: #6ee7b7; background: rgba(16, 185, 129, 0.12); }
+        .pill.hidden { color: #fcd34d; background: rgba(245, 158, 11, 0.12); }
+
+        .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        .icon-btn {
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--surface-border);
+            background: var(--surface);
+            color: var(--text);
+            font-size: 0.78rem;
+            transition: all var(--transition-fast);
+            white-space: nowrap;
+        }
+
+        .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        .icon-btn-danger:hover {
+            border-color: #ff4d4d;
+            color: #ff4d4d;
+            background: rgba(255, 77, 77, 0.08);
+        }
+
+        .icon-btn:disabled { opacity: 0.5; }
+
+        .table-empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        /* ----- Modal édition ----- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 2000;
+        }
+
+        .modal-overlay.open { display: flex; }
+
+        .modal-box {
+            background: var(--surface);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 520px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .modal-close { font-size: 1.5rem; line-height: 1; color: var(--text-secondary); padding: 4px 8px; }
+        .modal-close:hover { color: var(--text); }
+        .modal-body { padding: 22px 20px; overflow-y: auto; }
+
+        .star-picker { display: flex; gap: 6px; font-size: 1.8rem; line-height: 1; margin: 4px 0; }
+        .star-picker .star { color: rgba(255, 255, 255, 0.2); cursor: pointer; transition: color var(--transition-fast); }
+        .star-picker .star.on { color: var(--accent); }
+    </style>
+</head>
+
+<body>
+    <!-- ===== NAVIGATION (ADMIN) ===== -->
+    <nav class="navbar admin-nav" id="navbar">
+        <div class="container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                        <path d="M12 2L2 22h20L12 2z" />
+                    </svg>
+                </span>
+                AFFICH'PUB <span class="admin-badge">DIRECTEUR</span>
+            </a>
+            <div class="nav-links" id="navLinks">
+                <a href="admin_rdv.html">Gérer les RDV</a>
+                <a href="admin_contact.html">Gérer les Horaires</a>
+                <a href="admin_devis.html">Gérer les Devis</a>
+                <a href="admin_avis.html" class="active">Gérer les Avis</a>
+                <a href="#" id="logoutBtn" style="color:#ef4444;">Déconnexion</a>
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ===== AUTH GATE ===== -->
+    <div id="authGate" class="auth-gate" style="display:none;">
+        <div class="glass-card auth-card">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                    <path d="M12 2L2 22h20L12 2z" />
+                </svg>
+            </div>
+            <h2>Accès <span class="accent-text">Avis</span></h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Connexion sécurisée requise pour gérer les avis et
+                les codes.</p>
+            <form id="authForm" class="login-form" style="margin-top:1.5rem; text-align:left;">
+                <div class="form-group mb-2">
+                    <label for="authEmail">Email</label>
+                    <input type="email" id="authEmail" required autocomplete="username">
+                </div>
+                <div class="form-group mb-2">
+                    <label for="authPassword">Mot de passe</label>
+                    <input type="password" id="authPassword" required autocomplete="current-password">
+                </div>
+                <div id="authError" class="auth-error">Identifiants incorrects.</div>
+                <button type="submit" class="btn btn-primary btn-full" style="margin-top:1.2rem;">Se connecter</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== ADMIN CONTENT ===== -->
+    <div id="adminContent" style="display:none;">
+        <section class="page-hero" style="padding: 120px 0 30px;">
+            <div class="container">
+                <h1>Gestion des <span class="accent-text">Avis</span></h1>
+                <p>Générez des codes pour vos clients et modérez les avis vérifiés.</p>
+            </div>
+        </section>
+
+        <section style="padding-top:0;">
+            <div class="container">
+
+                <!-- ===== Section : génération de codes ===== -->
+                <div class="panel">
+                    <div class="section-title">🎟️ Générer un code d'avis</div>
+                    <p style="color:var(--text-secondary); font-size:0.88rem; margin-bottom:18px;">
+                        Chaque code à 4 chiffres permet à un client de déposer <strong>un</strong> avis vérifié.
+                        Communiquez-le avec son devis.
+                    </p>
+                    <div class="code-gen-row">
+                        <div class="form-group">
+                            <label for="clientName">Nom du client / référence devis (optionnel)</label>
+                            <input type="text" id="clientName" placeholder="Ex : Marie Dupont — DV-2026-A1B2">
+                        </div>
+                        <button class="btn btn-primary" id="genCodeBtn">Générer le code</button>
+                    </div>
+                    <div id="genCodeMsg" class="auth-error" style="margin-top:14px;"></div>
+                    <div class="codes-list" id="codesList">
+                        <div class="table-empty" style="padding:20px;">Chargement des codes…</div>
+                    </div>
+                </div>
+
+                <!-- ===== Section : liste des avis ===== -->
+                <div class="section-title">⭐ Avis déposés</div>
+                <div class="table-wrap">
+                    <table class="adm-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Note</th>
+                                <th>Avis (extrait)</th>
+                                <th>Statut</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="avisTableBody">
+                            <tr>
+                                <td colspan="5" class="table-empty">Chargement…</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ===== MODAL ÉDITION ===== -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal-box">
+            <div class="modal-head">
+                <h3>Modifier l'avis</h3>
+                <button class="modal-close" data-close="editModal" aria-label="Fermer">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group mb-2">
+                    <label>Note</label>
+                    <div class="star-picker" id="editStars">
+                        <span class="star" data-v="1">★</span>
+                        <span class="star" data-v="2">★</span>
+                        <span class="star" data-v="3">★</span>
+                        <span class="star" data-v="4">★</span>
+                        <span class="star" data-v="5">★</span>
+                    </div>
+                </div>
+                <div class="form-group mb-2">
+                    <label for="editTitre">Titre</label>
+                    <input type="text" id="editTitre" maxlength="80">
+                </div>
+                <div class="form-group mb-2">
+                    <label for="editDesc">Description</label>
+                    <textarea id="editDesc" maxlength="1000"></textarea>
+                </div>
+                <div id="editMsg" class="auth-error"></div>
+                <button class="btn btn-primary btn-full" id="saveEditBtn" style="margin-top:8px;">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script src="js/admin_avis.js"></script>
+</body>
+
+</html>
