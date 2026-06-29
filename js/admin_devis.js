@@ -91,10 +91,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ======================================================
-    //  APPELS EDGE FUNCTIONS
+    //  APPELS EDGE FUNCTIONS (Google Gemini 2.0 Flash)
     // ======================================================
-    // L'API Groq renvoie parfois { error: { message, type, code } } (objet) au
-    // lieu d'une simple chaîne : on normalise pour toujours obtenir du texte lisible.
+    const GEMINI_MODEL = 'gemini-2.0-flash';
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    // L'API renvoie parfois { error: { message, ... } } (objet) au lieu d'une
+    // chaîne : on normalise pour toujours obtenir un texte lisible.
     function errorMessageOf(data, status) {
         const e = data && data.error;
         if (!e) return `Erreur serveur (${status})`;
@@ -103,19 +106,43 @@ document.addEventListener('DOMContentLoaded', () => {
         return `Erreur serveur (${status})`;
     }
 
+    function isRateLimitStatus(status, data) {
+        if (status === 429) return true;
+        const msg = errorMessageOf(data, status).toLowerCase();
+        return msg.includes('rate limit') || msg.includes('rate_limit') ||
+            msg.includes('too many requests') || msg.includes('quota') ||
+            msg.includes('resource_exhausted');
+    }
+
+    // Gemini 2.0 Flash gratuit : 15 requêtes/min. Chaque action admine (analyse,
+    // vrai devis, pub) = 1 requête ; en cas de 429 on réessaie avec un backoff.
+    const MAX_RETRIES = 2;
     async function callChatFn(messages, system) {
-        const res = await fetch(`${FN_BASE}/chat`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${SUPABASE_KEY}`,
-                'apikey': SUPABASE_KEY
-            },
-            body: JSON.stringify({ system, messages, model: 'llama-3.3-70b-versatile' })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(errorMessageOf(data, res.status));
-        return (data?.choices?.[0]?.message?.content || '').trim();
+        let attempt = 0;
+        for (;;) {
+            const res = await fetch(`${FN_BASE}/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${SUPABASE_KEY}`,
+                    'apikey': SUPABASE_KEY
+                },
+                body: JSON.stringify({ system, messages, model: GEMINI_MODEL })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) return (data?.choices?.[0]?.message?.content || '').trim();
+
+            if (isRateLimitStatus(res.status, data) && attempt < MAX_RETRIES) {
+                const retryAfter = parseInt(res.headers.get('Retry-After') || '', 10);
+                const wait = Number.isFinite(retryAfter) && retryAfter > 0
+                    ? retryAfter * 1000
+                    : (attempt + 1) * 4000;
+                await sleep(wait);
+                attempt++;
+                continue;
+            }
+            throw new Error(errorMessageOf(data, res.status));
+        }
     }
 
     async function callGenAd(prompt) {
@@ -189,11 +216,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Transcription lisible de la conversation (pour l'analyse IA).
-    // Le modèle gratuit a une limite stricte de tokens par requête : on plafonne
-    // la longueur de la transcription pour ne pas dépasser le quota (sinon erreur
-    // « Request too large »). On garde en priorité la fin de l'échange (la plus
-    // utile pour juger du déroulement) en élaguant le début si nécessaire.
-    const MAX_TRANSCRIPT_CHARS = 8000;
+    // Gemini accepte 1M tokens/min : on peut transmettre l'intégralité de
+    // l'échange (l'analyse ne perd plus aucun élément). On conserve néanmoins un
+    // garde-fou très large contre une conversation anormalement longue ; au-delà,
+    // on garde en priorité la FIN de l'échange (la plus utile) en élaguant le début.
+    const MAX_TRANSCRIPT_CHARS = 200000;
     function conversationToText(d) {
         const msgs = d && d.conversation && Array.isArray(d.conversation.messages)
             ? d.conversation.messages

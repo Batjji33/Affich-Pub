@@ -1,13 +1,23 @@
 // ============================================================
-//  Edge Function "chat" — Proxy Groq (gratuit)
-//  Reçoit { messages, system, model } et relaie vers Groq.
-//  Fallback automatique sur llama-3.1-8b-instant si rate-limit.
+//  Edge Function "chat" — Proxy Google Gemini 2.0 Flash
+//  Reçoit { messages, system } et relaie vers l'endpoint
+//  OpenAI-compatible de Gemini. La réponse conserve le format
+//  OpenAI ({ choices: [{ message: { content } }] }), si bien que
+//  le code client/admin n'a pas besoin de changer de parseur.
+//
+//  Limites du palier gratuit Gemini 2.0 Flash :
+//    • 1 000 000 tokens / minute  → l'optimisation des tokens
+//      n'est plus un enjeu : on envoie tout le contexte utile.
+//    • 15 requêtes / minute        → c'est LA contrainte à gérer.
+//      En cas de dépassement, Gemini renvoie 429 ; on relaie le
+//      statut et l'en-tête Retry-After pour que le client puisse
+//      patienter puis réessayer proprement.
 // ============================================================
 import { corsHeaders } from "../_shared/cors.ts";
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_MODEL = "llama-3.3-70b-versatile";
-const FALLBACK_MODEL = "llama-3.1-8b-instant";
+const GEMINI_URL =
+  "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const DEFAULT_MODEL = "gemini-2.0-flash";
 
 Deno.serve(async (req) => {
   // Préflight CORS
@@ -16,47 +26,51 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
-    if (!GROQ_API_KEY) {
-      throw new Error("GROQ_API_KEY non configurée (supabase secrets set GROQ_API_KEY=...)");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      throw new Error(
+        "GEMINI_API_KEY non configurée (supabase secrets set GEMINI_API_KEY=...)",
+      );
     }
 
     const { messages = [], system, model } = await req.json();
 
+    // Le prompt système est passé en 1er message role:"system" (supporté par
+    // l'endpoint OpenAI-compatible de Gemini).
     const finalMessages = system
       ? [{ role: "system", content: system }, ...messages]
       : messages;
 
-    const callGroq = (mdl: string) =>
-      fetch(GROQ_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: mdl,
-          messages: finalMessages,
-          temperature: 0.5,
-          // Réponses courtes (questions / JSON final) → on limite les tokens pour
-          // consommer moins et atteindre la limite de débit (rate limit) moins vite.
-          max_tokens: 768,
-        }),
-      });
-
-    // 1re tentative avec le modèle demandé (ou le modèle par défaut)
-    let resp = await callGroq(model || DEFAULT_MODEL);
-
-    // Rate limit (429) → on bascule sur le modèle léger
-    if (resp.status === 429) {
-      resp = await callGroq(FALLBACK_MODEL);
-    }
+    const resp = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${GEMINI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: model || DEFAULT_MODEL,
+        messages: finalMessages,
+        temperature: 0.5,
+        // Quota de 1M tokens/min : on peut laisser des réponses confortables
+        // sans craindre la limite de débit (qui se compte en requêtes).
+        max_tokens: 2048,
+      }),
+    });
 
     const data = await resp.json();
 
+    // On propage le statut tel quel (notamment 429) ainsi que Retry-After
+    // quand Gemini l'indique, pour piloter l'attente côté client.
+    const headers: Record<string, string> = {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+    };
+    const retryAfter = resp.headers.get("retry-after");
+    if (retryAfter) headers["Retry-After"] = retryAfter;
+
     return new Response(JSON.stringify(data), {
       status: resp.status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers,
     });
   } catch (err) {
     return new Response(

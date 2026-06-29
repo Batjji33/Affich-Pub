@@ -1,8 +1,13 @@
 # Devis IA — Guide de déploiement
 
 Fonctionnalité « Mon Devis IA » + page admin « Devis » pour Affich'Pub.
-IA 100 % gratuite : **Groq** (texte) et **Pollinations.ai** (images, aucune clé requise), via des
-**Edge Functions Supabase** (les clés API ne sont jamais exposées côté client).
+IA 100 % gratuite : **Google Gemini 2.0 Flash** (texte) et **Pollinations.ai** (images, aucune clé requise),
+via des **Edge Functions Supabase** (les clés API ne sont jamais exposées côté client).
+
+> **Pourquoi Gemini 2.0 Flash ?** Le palier gratuit offre **1 000 000 tokens/minute** (au lieu des
+> limites strictes de Groq/Llama qui bloquaient trop vite). La seule contrainte restante est de
+> **15 requêtes/minute** : elle est gérée côté client (limiteur de débit + nouvelle tentative
+> automatique en cas de 429) et côté admin (retry sur les actions IA).
 
 ---
 
@@ -30,7 +35,7 @@ personnelles des clients). Créer **un utilisateur** :
 
 | Service | URL | Variable |
 |---|---|---|
-| Groq (texte) | https://console.groq.com | `GROQ_API_KEY` (commence par `gsk_`) |
+| Google Gemini (texte) | https://aistudio.google.com/app/apikey | `GEMINI_API_KEY` (commence par `AIza`) |
 | Pollinations.ai (images) | https://pollinations.ai | aucune — service public, sans clé |
 
 ## 4. Déployer les Edge Functions (terminal, à la racine du projet)
@@ -41,7 +46,7 @@ supabase login
 supabase link --project-ref cyeppawyuxjlvjmpgnvr
 
 # Secrets (jamais côté client)
-supabase secrets set GROQ_API_KEY=gsk_xxxxxxxx
+supabase secrets set GEMINI_API_KEY=AIzaxxxxxxxx
 # Pollinations.ai ne nécessite aucune clé — rien à configurer pour gen-ad
 
 # Déploiement des fonctions.
@@ -66,12 +71,12 @@ supabase functions deploy gen-ad --no-verify-jwt
 
 ```
 devis.html              Page client « Mon Devis IA » (chatbot)
-js/devis.js             Logique chatbot : Groq, quick replies, PDF jsPDF, sauvegarde Supabase
+js/devis.js             Logique chatbot : Gemini, limiteur de débit, quick replies, PDF jsPDF, sauvegarde Supabase
 admin_devis.html        Page admin (auth Supabase + tableau + modales)
-js/admin_devis.js       Auth, tableau, statut éditable, 3 actions IA
+js/admin_devis.js       Auth, tableau, statut éditable, 3 actions IA (Gemini)
 css/style.css           + section « CHATBOT DEVIS IA » (réutilise le design system existant)
 supabase/schema.sql     Table devis + RLS
-supabase/functions/chat/index.ts     Proxy Groq (fallback llama-3.1-8b-instant si 429)
+supabase/functions/chat/index.ts     Proxy Gemini 2.0 Flash (endpoint OpenAI-compatible, relais 429 + Retry-After)
 supabase/functions/gen-ad/index.ts   Proxy Pollinations.ai (image → base64, sans clé)
 supabase/functions/_shared/cors.ts   En-têtes CORS partagés
 ```
@@ -96,7 +101,9 @@ prixEstime = clamp(prixEstime, 50, 500)   // plancher 50 €, plafond 500 €
 
 ## Points d'attention
 
-- **Groq rate limit** (~30 req/min) → bascule automatique sur `llama-3.1-8b-instant` (géré dans l'Edge Function).
+- **Gemini rate limit** : 1M tokens/min (confortable) mais **15 requêtes/min**. Côté client, un limiteur de
+  débit (fenêtre glissante de 60 s) lisse les envois d'un même visiteur, et un **retry automatique avec backoff**
+  rattrape les 429 (clé API partagée entre visiteurs). Côté admin, les 3 actions IA réessaient aussi en cas de 429.
 - **Image Pollinations.ai** : gratuite et sans clé, mais sans support fiable du texte intégré à l'image.
   Le prompt envoyé au modèle ne décrit donc que le visuel (couleurs, scène, style) — le slogan/texte
   est superposé séparément, côté client, via Canvas (`renderGeneratedImage` dans `js/admin_devis.js`),

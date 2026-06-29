@@ -1,9 +1,15 @@
 /* ============================================
    DEVIS.JS — Chatbot Devis IA
-   Conversation Groq (via Edge Function), quick
-   replies dynamiques, détection de fin de devis,
-   estimation tarifaire, PDF (jsPDF) + sauvegarde
-   Supabase.
+   Conversation Google Gemini 2.0 Flash (via Edge
+   Function), quick replies dynamiques, détection
+   de fin de devis, estimation tarifaire, PDF
+   (jsPDF) + sauvegarde Supabase.
+
+   Modèle : Gemini 2.0 Flash (palier gratuit).
+   Quota = 1 000 000 tokens/min mais SEULEMENT
+   15 requêtes/min. On envoie donc TOUT le contexte
+   (anti-oubli) et on régule le DÉBIT de requêtes
+   (voir RateLimiter + retry 429 plus bas).
    ============================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -32,10 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 
     // --- SYSTEM PROMPT ---
-    // Volontairement compact : ce prompt est renvoyé en ENTIER à chaque message
-    // (l'API n'a pas de mémoire serveur), donc sa taille pèse directement sur le
-    // quota de tokens/minute du modèle gratuit. Le moindre mot superflu ici se
-    // paie à CHAQUE tour de la conversation.
+    // Renvoyé en ENTIER à chaque message (l'API n'a pas de mémoire serveur).
+    // Avec Gemini (1M tokens/min) la longueur n'est plus un problème de quota ;
+    // on privilégie donc la CLARTÉ et la fiabilité des consignes plutôt que la
+    // concision. La contrainte qui reste est le nombre de requêtes/min, gérée
+    // séparément côté débit (RateLimiter).
     const SYSTEM_PROMPT = `Tu es l'assistant virtuel d'Affich'Pub (régie publicitaire). Ton chaleureux, conversationnel, jamais froid ni robotique.
 
 Ordre de collecte (une seule question à la fois, jamais sautée) :
@@ -73,7 +80,7 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
 
     // --- ÉTAT ---
     const STORAGE_KEY = 'devis_ia_state';
-    const history = [];          // [{ role, content }] pour Groq (inclut les blocs techniques ###ETAT###)
+    const history = [];          // [{ role, content }] envoyé à Gemini (déjà nettoyé des blocs ###ETAT###)
     let displayLog = [];         // [{ role, text }] ce qui est réellement affiché (pour restauration propre)
     let collected = {};          // ÉTAT MAÎTRE : informations réellement obtenues (le code en est propriétaire)
     let devisData = null;        // données finales du devis (= collected une fois complet)
@@ -153,6 +160,7 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
     function showTyping(show) {
         typingEl.style.display = show ? 'block' : 'none';
         if (show) scrollToBottom();
+        else setTypingNote('');
     }
 
     function setInputEnabled(enabled) {
@@ -226,17 +234,54 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
     }
 
     // ======================================================
-    //  APPEL GROQ (Edge Function "chat")
+    //  APPEL GEMINI (Edge Function "chat") + GESTION DU DÉBIT
     // ======================================================
-    // On n'envoie au modèle que les derniers messages (le contexte récent suffit et
-    // réduit fortement la consommation de tokens → la limite est atteinte moins vite).
-    const MAX_HISTORY_SENT = 24;
-    function trimmedHistory() {
-        return history.length > MAX_HISTORY_SENT ? history.slice(-MAX_HISTORY_SENT) : history;
+    // Gemini 2.0 Flash gratuit : 1M tokens/min mais 15 requêtes/min.
+    // → On envoie l'historique COMPLET (anti-oubli : le modèle garde tout le
+    //   contexte) et on régule strictement le NOMBRE de requêtes par minute.
+    const GEMINI_MODEL = 'gemini-2.0-flash';
+
+    // Note d'attente affichée sous l'indicateur de frappe (ex. patientement 429).
+    function setTypingNote(text) {
+        let note = typingEl.querySelector('.chat-typing-note');
+        if (!text) { if (note) note.remove(); return; }
+        if (!note) {
+            note = document.createElement('div');
+            note.className = 'chat-typing-note';
+            note.style.cssText = 'font-size:0.8rem;color:var(--text-muted,#888);margin-top:4px;';
+            typingEl.appendChild(note);
+        }
+        note.textContent = text;
+        scrollToBottom();
     }
 
-    // L'API Groq renvoie parfois { error: { message, type, code } } (objet) au
-    // lieu d'une simple chaîne : on normalise pour toujours obtenir du texte lisible.
+    // --- Limiteur de débit côté client (fenêtre glissante de 60 s) ---
+    // Empêche un même visiteur de dépasser 15 req/min en enchaînant les envois.
+    // La clé API étant partagée entre tous les visiteurs, un 429 reste possible
+    // (plusieurs personnes simultanément) : il est alors rattrapé par le retry.
+    const RateLimiter = (() => {
+        const MAX_PER_MIN = 15;
+        const WINDOW_MS = 60_000;
+        const SAFETY_MS = 300;     // marge pour absorber la latence réseau
+        const times = [];          // horodatages des requêtes récentes
+
+        async function acquire(onWait) {
+            for (;;) {
+                const now = Date.now();
+                while (times.length && now - times[0] >= WINDOW_MS) times.shift();
+                if (times.length < MAX_PER_MIN) { times.push(Date.now()); return; }
+                const wait = WINDOW_MS - (now - times[0]) + SAFETY_MS;
+                if (onWait) onWait(wait);
+                await sleep(wait);
+            }
+        }
+        return { acquire };
+    })();
+
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    // L'API renvoie parfois { error: { message, ... } } (objet) au lieu d'une
+    // chaîne : on normalise pour toujours obtenir un texte lisible.
     function errorMessageOf(data, status) {
         const e = data && data.error;
         if (!e) return `Erreur serveur (${status})`;
@@ -245,14 +290,21 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
         return `Erreur serveur (${status})`;
     }
 
-    function isRateLimitError(status, data) {
+    function isRateLimitStatus(status, data) {
         if (status === 429) return true;
         const msg = errorMessageOf(data, status).toLowerCase();
         return msg.includes('rate limit') || msg.includes('rate_limit') ||
-            msg.includes('too many requests') || msg.includes('quota');
+            msg.includes('too many requests') || msg.includes('quota') ||
+            msg.includes('resource_exhausted');
     }
 
-    async function callChat() {
+    function waitMessage(ms) {
+        const s = Math.max(1, Math.ceil(ms / 1000));
+        return `⏳ Beaucoup de demandes en ce moment… reprise dans ~${s}s`;
+    }
+
+    // Un seul aller-retour réseau (sans retry).
+    async function fetchChat() {
         const res = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
             method: 'POST',
             headers: {
@@ -262,19 +314,47 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
             },
             body: JSON.stringify({
                 system: buildSystemPrompt(),
-                messages: trimmedHistory(),
-                model: 'llama-3.3-70b-versatile'
+                messages: history,     // contexte COMPLET : le modèle n'oublie rien
+                model: GEMINI_MODEL
             })
         });
-        const data = await res.json();
-        if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { res, data };
+    }
+
+    // Appel complet : limiteur de débit + retry automatique sur 429 (backoff,
+    // en respectant Retry-After si présent). Affiche une note d'attente discrète.
+    const MAX_RETRIES = 2;
+    async function callChat() {
+        await RateLimiter.acquire((ms) => setTypingNote(waitMessage(ms)));
+
+        let attempt = 0;
+        for (;;) {
+            const { res, data } = await fetchChat();
+            if (res.ok) {
+                setTypingNote('');
+                const content = data?.choices?.[0]?.message?.content;
+                if (!content) throw new Error('Réponse vide du serveur.');
+                return content.trim();
+            }
+
+            const rateLimited = isRateLimitStatus(res.status, data);
+            if (rateLimited && attempt < MAX_RETRIES) {
+                const retryAfter = parseInt(res.headers.get('Retry-After') || '', 10);
+                const wait = Number.isFinite(retryAfter) && retryAfter > 0
+                    ? retryAfter * 1000
+                    : (attempt + 1) * 4000;   // backoff : 4 s puis 8 s
+                setTypingNote(waitMessage(wait));
+                await sleep(wait);
+                attempt++;
+                continue;
+            }
+
+            setTypingNote('');
             const err = new Error(errorMessageOf(data, res.status));
-            if (isRateLimitError(res.status, data)) err.isRateLimit = true;
+            if (rateLimited) err.isRateLimit = true;
             throw err;
         }
-        const content = data?.choices?.[0]?.message?.content;
-        if (!content) throw new Error('Réponse vide du serveur.');
-        return content.trim();
     }
 
     // ======================================================
