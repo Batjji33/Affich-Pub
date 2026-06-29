@@ -1,11 +1,11 @@
 // ============================================================
-//  Edge Function "chat" — Proxy Google Gemini 2.0 Flash
+//  Edge Function "chat" — Proxy Google Gemini 2.5 Flash
 //  Reçoit { messages, system } et relaie vers l'endpoint
 //  OpenAI-compatible de Gemini. La réponse conserve le format
 //  OpenAI ({ choices: [{ message: { content } }] }), si bien que
 //  le code client/admin n'a pas besoin de changer de parseur.
 //
-//  Limites du palier gratuit Gemini 2.0 Flash :
+//  Limites du palier gratuit Gemini 2.5 Flash :
 //    • 1 000 000 tokens / minute  → l'optimisation des tokens
 //      n'est plus un enjeu : on envoie tout le contexte utile.
 //    • 15 requêtes / minute        → c'est LA contrainte à gérer.
@@ -17,7 +17,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-const DEFAULT_MODEL = "gemini-2.0-flash";
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 Deno.serve(async (req) => {
   // Préflight CORS

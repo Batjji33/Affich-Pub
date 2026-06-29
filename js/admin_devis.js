@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ======================================================
     //  APPELS EDGE FUNCTIONS (Google Gemini 2.0 Flash)
     // ======================================================
-    const GEMINI_MODEL = 'gemini-2.0-flash';
+    const GEMINI_MODEL = 'gemini-2.5-flash';
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     // L'API renvoie parfois { error: { message, ... } } (objet) au lieu d'une

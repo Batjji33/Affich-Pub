@@ -239,7 +239,7 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
     // Gemini 2.0 Flash gratuit : 1M tokens/min mais 15 requêtes/min.
     // → On envoie l'historique COMPLET (anti-oubli : le modèle garde tout le
     //   contexte) et on régule strictement le NOMBRE de requêtes par minute.
-    const GEMINI_MODEL = 'gemini-2.0-flash';
+    const GEMINI_MODEL = 'gemini-2.5-flash';
 
     // Note d'attente affichée sous l'indicateur de frappe (ex. patientement 429).
     function setTypingNote(text) {
