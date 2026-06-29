@@ -126,7 +126,7 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
     }
 
     // Message d'accueil (affiché + ajouté à l'historique comme 1er tour assistant)
-    const WELCOME = "Bonjour 👋 Je suis l'assistant Affich'Pub. Je vais vous aider à construire votre devis publicitaire en quelques minutes.\n\nPour commencer, quel est votre **nom et prénom** ?";
+    const WELCOME = "Bonjour 👋 Je suis l'assistant IA d'Affich'Pub. Grâce à l'IA, je construis votre devis avec vous en quelques minutes — rapide, précis, et toujours dans l'esprit familial qui nous est cher.\n\nPour commencer, quel est votre **nom et prénom** ?";
 
     // ======================================================
     //  RENDU DES MESSAGES
