@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { messages = [], system, model } = await req.json();
+    const { messages = [], system, model, max_tokens } = await req.json();
 
     // Le prompt système est passé en 1er message role:"system" (supporté par
     // l'endpoint OpenAI-compatible de Gemini).
@@ -53,7 +53,15 @@ Deno.serve(async (req) => {
         temperature: 0.5,
         // Quota de 1M tokens/min : on peut laisser des réponses confortables
         // sans craindre la limite de débit (qui se compte en requêtes).
-        max_tokens: 2048,
+        // Par défaut généreux (un rapport d'analyse structuré peut être long) ;
+        // un appelant peut demander plus via { max_tokens } dans le corps.
+        max_tokens: Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : 4096,
+        // Gemini 2.5 Flash fait du "thinking" interne par défaut, qui consomme
+        // une partie du budget max_tokens AVANT la réponse visible — au risque
+        // de la tronquer. Nos usages (suivre des consignes, produire un texte
+        // structuré) n'ont pas besoin de ce raisonnement étendu : on le désactive
+        // pour garantir une réponse complète et plus rapide.
+        reasoning_effort: "none",
       }),
     });
 
