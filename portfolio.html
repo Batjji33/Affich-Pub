@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nos Réalisations — Affich'Pub</title>
+    <meta name="description"
+        content="Découvrez les réalisations d'Affich'Pub : nos campagnes et créations visuelles qui marquent les esprits depuis 1980.">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* ----- Portfolio grid ----- */
+        .portfolio-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        @media (min-width: 600px) {
+            .portfolio-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (min-width: 960px) {
+            .portfolio-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .portfolio-card {
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .portfolio-card .card-photo {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+            background: var(--surface-light);
+            display: block;
+        }
+
+        .portfolio-card .card-photo-placeholder {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, var(--surface-light), var(--surface));
+            color: var(--text-muted);
+        }
+
+        .portfolio-card .card-content {
+            padding: 20px 22px 24px;
+        }
+
+        .portfolio-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+
+        .portfolio-card p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .portfolio-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-muted);
+        }
+
+        .portfolio-state .spinner-ring {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 16px;
+            border: 3px solid var(--surface-border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: pf-spin 0.8s linear infinite;
+        }
+
+        @keyframes pf-spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ===== NAVIGATION ===== -->
+    <nav class="navbar" id="navbar">
+        <div class="container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                        <path d="M12 2L2 22h20L12 2z" />
+                    </svg>
+                </span>
+                AFFICH'PUB
+            </a>
+            <div class="nav-links" id="navLinks">
+                <a href="index.html">Accueil</a>
+                <a href="portfolio.html" class="active">Réalisations</a>
+                <a href="devis.html">Mon Devis</a>
+                <a href="reservation.html">Réservez mon RDV</a>
+                <a href="contact.html">Nous Trouver</a>
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ===== PAGE HERO ===== -->
+    <section class="page-hero" style="padding: 140px 0 50px;">
+        <div class="container">
+            <h1>Nos <span class="accent-text">Réalisations</span></h1>
+            <p>Un aperçu des campagnes et créations visuelles que nous avons imaginées pour nos clients.</p>
+        </div>
+    </section>
+
+    <!-- ===== PORTFOLIO GRID ===== -->
+    <section style="padding-top: 0;">
+        <div class="container">
+            <div id="portfolioState" class="portfolio-state">
+                <div class="spinner-ring"></div>
+                Chargement des réalisations…
+            </div>
+            <div id="portfolioGrid" class="portfolio-grid"></div>
+        </div>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>© 2024 Agence Affich'Pub. Tous droits réservés.</p>
+                <div style="display:flex; gap:24px; align-items: center;">
+                    <p>L'agence de communication visuelle de demain.</p>
+                    <a href="admin_login.html" target="_blank"
+                        style="color: var(--text-muted); font-size: 0.8rem; text-decoration: none; opacity: 0.5;">Admin</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+    <script src="js/portfolio.js"></script>
+</body>
+
+</html>

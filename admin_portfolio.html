@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration — Portfolio</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23FFE500'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='%23000' font-weight='bold'>A</text></svg>">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .admin-nav {
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .admin-nav .nav-links a {
+            color: var(--accent);
+        }
+
+        .admin-badge {
+            background: var(--accent);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        /* ----- Auth gate ----- */
+        .auth-gate {
+            min-height: 70vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .auth-card .logo-icon {
+            display: inline-block;
+            width: 48px;
+            height: 48px;
+            background: var(--accent);
+            border-radius: var(--radius-sm);
+            padding: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .auth-error {
+            color: #ef4444;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 0.5rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        /* ----- Toolbar ----- */
+        .admin-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+        }
+
+        /* ----- Admin grid ----- */
+        .admin-portfolio-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        @media (min-width: 600px) {
+            .admin-portfolio-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (min-width: 960px) {
+            .admin-portfolio-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        .admin-pf-card {
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .admin-pf-card .pf-photo {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+            background: var(--surface-light);
+        }
+
+        .admin-pf-card .pf-photo-placeholder {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            background: linear-gradient(135deg, var(--surface-light), var(--surface));
+            color: var(--text-muted);
+        }
+
+        .admin-pf-card .pf-body {
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .admin-pf-card h3 { font-size: 1rem; }
+
+        .admin-pf-card .pf-desc {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.5;
+            flex: 1;
+            white-space: pre-wrap;
+        }
+
+        .pf-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .icon-btn {
+            flex: 1;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--surface-border);
+            background: var(--surface);
+            color: var(--text);
+            font-size: 0.8rem;
+            transition: all var(--transition-fast);
+        }
+
+        .icon-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .icon-btn-danger:hover {
+            border-color: #ff4d4d;
+            color: #ff4d4d;
+            background: rgba(255, 77, 77, 0.08);
+        }
+
+        .pf-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        /* ----- Modal ----- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 2000;
+        }
+
+        .modal-overlay.open { display: flex; }
+
+        .modal-box {
+            background: var(--surface);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 540px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .modal-head h3 { font-size: 1.05rem; }
+
+        .modal-close {
+            font-size: 1.4rem;
+            line-height: 1;
+            color: var(--text-secondary);
+            padding: 4px 8px;
+        }
+
+        .modal-close:hover { color: var(--text); }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        /* ----- Upload / preview ----- */
+        .upload-zone {
+            border: 1px dashed var(--surface-border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .upload-zone:hover { border-color: var(--accent); color: var(--accent); }
+
+        .photo-preview {
+            margin-top: 12px;
+            display: none;
+        }
+
+        .photo-preview img {
+            max-height: 180px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            margin: 0 auto;
+        }
+
+        .form-feedback {
+            margin-top: 14px;
+            font-size: 0.85rem;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            display: none;
+        }
+
+        .form-feedback.error {
+            display: block;
+            color: #fca5a5;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+
+        .form-feedback.success {
+            display: block;
+            color: #6ee7b7;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ===== NAVIGATION (ADMIN) ===== -->
+    <nav class="navbar admin-nav" id="navbar">
+        <div class="container">
+            <a href="index.html" class="nav-logo">
+                <span class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                        <path d="M12 2L2 22h20L12 2z" />
+                    </svg>
+                </span>
+                AFFICH'PUB <span class="admin-badge">DIRECTEUR</span>
+            </a>
+            <div class="nav-links" id="navLinks">
+                <a href="admin_rdv.html">Gérer les RDV</a>
+                <a href="admin_contact.html">Gérer les Horaires</a>
+                <a href="admin_devis.html">Gérer les Devis</a>
+                <a href="admin_portfolio.html" class="active">Gérer le Portfolio</a>
+                <a href="#" id="logoutBtn" style="color:#ef4444;">Déconnexion</a>
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ===== AUTH GATE ===== -->
+    <div id="authGate" class="auth-gate" style="display:none;">
+        <div class="glass-card auth-card">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5">
+                    <path d="M12 2L2 22h20L12 2z" />
+                </svg>
+            </div>
+            <h2>Accès <span class="accent-text">Portfolio</span></h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Connexion sécurisée requise pour gérer les
+                réalisations.</p>
+            <form id="authForm" class="login-form" style="margin-top:1.5rem; text-align:left;">
+                <div class="form-group mb-2">
+                    <label for="authEmail">Email</label>
+                    <input type="email" id="authEmail" required autocomplete="username">
+                </div>
+                <div class="form-group mb-2">
+                    <label for="authPassword">Mot de passe</label>
+                    <input type="password" id="authPassword" required autocomplete="current-password">
+                </div>
+                <div id="authError" class="auth-error">Identifiants incorrects.</div>
+                <button type="submit" class="btn btn-primary btn-full" style="margin-top:1.2rem;">Se connecter</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== ADMIN CONTENT ===== -->
+    <div id="adminContent" style="display:none;">
+        <section class="page-hero" style="padding: 120px 0 40px;">
+            <div class="container">
+                <h1>Gestion du <span class="accent-text">Portfolio</span></h1>
+                <p>Ajoutez, modifiez ou supprimez les réalisations affichées sur le site public.</p>
+            </div>
+        </section>
+
+        <section style="padding-top:0;">
+            <div class="container">
+                <div class="admin-toolbar">
+                    <p id="pfCount" style="color: var(--text-muted); font-size: 0.9rem;"></p>
+                    <button class="btn btn-primary" id="addBtn">+ Ajouter une réalisation</button>
+                </div>
+
+                <div id="pfState" class="pf-state">Chargement…</div>
+                <div id="pfGrid" class="admin-portfolio-grid"></div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ===== MODAL FORMULAIRE (ajout / édition) ===== -->
+    <div class="modal-overlay" id="formModal">
+        <div class="modal-box">
+            <div class="modal-head">
+                <h3 id="formModalTitle">Ajouter une réalisation</h3>
+                <button class="modal-close" data-close="formModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="pfForm">
+                    <input type="hidden" id="pfId">
+                    <div class="form-group mb-2">
+                        <label for="pfTitre">Titre <span style="color:var(--accent)">*</span></label>
+                        <input type="text" id="pfTitre" maxlength="120" required placeholder="Ex : Campagne Dior 2024">
+                    </div>
+                    <div class="form-group mb-2">
+                        <label for="pfDescription">Description</label>
+                        <textarea id="pfDescription" rows="4"
+                            placeholder="Décrivez la réalisation…"></textarea>
+                    </div>
+                    <div class="form-group mb-2">
+                        <label>Photo</label>
+                        <div class="upload-zone" id="uploadZone">
+                            📷 Cliquez pour choisir une image (JPG, PNG, WebP — max 5 Mo)
+                        </div>
+                        <input type="file" id="pfPhoto" accept="image/*" style="display:none;">
+                        <div class="photo-preview" id="photoPreview">
+                            <img id="previewImg" alt="Aperçu">
+                        </div>
+                    </div>
+
+                    <div class="form-feedback" id="formFeedback"></div>
+
+                    <button type="submit" class="btn btn-primary btn-full" id="saveBtn"
+                        style="margin-top:1rem;">Enregistrer</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script src="js/admin_portfolio.js"></script>
+</body>
+
+</html>
