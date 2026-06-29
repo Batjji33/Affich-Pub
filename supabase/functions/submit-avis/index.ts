@@ -8,9 +8,14 @@
 //
 //  Étapes :
 //    1. Valider les entrées (code 4 chiffres, titre, note 1-5).
-//    2. Vérifier que le code existe ET n'est pas déjà utilisé.
-//    3. Insérer l'avis (visible + "vérifié" car lié à un code).
-//    4. Marquer le code comme utilisé (anti-doublon).
+//    2. Vérifier que le code existe.
+//    3. RÉCLAMER le code de façon atomique (PATCH conditionné sur
+//       utilise=false) AVANT d'insérer l'avis : ainsi, si deux
+//       requêtes arrivent en même temps pour le même code, une
+//       seule peut gagner la réclamation — l'autre échoue avec 409,
+//       garantissant qu'un code ne sert jamais à plus d'un avis.
+//    4. Insérer l'avis. En cas d'échec, on annule la réclamation
+//       (remet utilise=false) pour ne pas perdre le code.
 //
 //  Réponses :
 //    200 { ok: true }
@@ -73,7 +78,7 @@ Deno.serve(async (req) => {
       return json({ error: "La note doit être comprise entre 1 et 5 étoiles." }, 400);
     }
 
-    // 2) Le code existe-t-il ? Est-il déjà utilisé ?
+    // 2) Le code existe-t-il ?
     const lookup = await rest(
       `codes_avis?code=eq.${encodeURIComponent(code)}&select=id,utilise`,
     );
@@ -87,11 +92,31 @@ Deno.serve(async (req) => {
       return json({ error: "Ce code est invalide. Vérifiez le code reçu avec votre devis." }, 404);
     }
     const found = rows[0];
-    if (found.utilise) {
+
+    // 3) Réclamation atomique du code : la condition "utilise=is.false"
+    //    fait que ce PATCH ne peut réussir qu'une seule fois, même si
+    //    deux requêtes arrivent simultanément pour le même code.
+    const claim = await rest(
+      `codes_avis?id=eq.${found.id}&utilise=is.false`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ utilise: true }),
+      },
+    );
+    if (!claim.ok) {
+      const txt = await claim.text();
+      console.error("Réclamation du code échouée:", claim.status, txt);
+      return json({ error: "Erreur lors de la vérification du code." }, 500);
+    }
+    const claimedRows = await claim.json();
+    if (!Array.isArray(claimedRows) || claimedRows.length === 0) {
+      // Le code était déjà marqué utilisé (par cette requête ou une autre
+      // arrivée en même temps) : on refuse, le code reste à un seul usage.
       return json({ error: "Ce code a déjà été utilisé pour déposer un avis." }, 409);
     }
 
-    // 3) Insertion de l'avis (visible + vérifié)
+    // 4) Insertion de l'avis (visible + vérifié)
     const insert = await rest("avis", {
       method: "POST",
       headers: { Prefer: "return=minimal" },
@@ -106,24 +131,13 @@ Deno.serve(async (req) => {
     if (!insert.ok) {
       const txt = await insert.text();
       console.error("Insertion avis échouée:", insert.status, txt);
-      return json({ error: "Impossible d'enregistrer l'avis. Réessayez." }, 500);
-    }
-
-    // 4) Marquage du code comme utilisé (anti-doublon).
-    //    On cible aussi utilise=false pour éviter qu'un double appel
-    //    quasi-simultané n'enregistre deux avis avec le même code.
-    const mark = await rest(
-      `codes_avis?id=eq.${found.id}&utilise=is.false`,
-      {
+      // On annule la réclamation pour ne pas perdre le code définitivement.
+      await rest(`codes_avis?id=eq.${found.id}`, {
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ utilise: true }),
-      },
-    );
-    if (!mark.ok) {
-      const txt = await mark.text();
-      console.error("Marquage code échoué:", mark.status, txt);
-      // L'avis est déjà enregistré ; on ne bloque pas le client.
+        body: JSON.stringify({ utilise: false }),
+      });
+      return json({ error: "Impossible d'enregistrer l'avis. Réessayez." }, 500);
     }
 
     return json({ ok: true });
