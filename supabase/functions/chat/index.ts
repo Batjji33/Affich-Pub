@@ -57,10 +57,16 @@ Deno.serve(async (req) => {
       }),
     });
 
-    const data = await resp.json();
+    // On lit d'abord en TEXTE : Gemini peut renvoyer une erreur non-JSON (HTML,
+    // corps vide…) sur certains 4xx/5xx, ce qui ferait planter resp.json().
+    const rawText = await resp.text();
+    let data: unknown;
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = null;
+    }
 
-    // On propage le statut tel quel (notamment 429) ainsi que Retry-After
-    // quand Gemini l'indique, pour piloter l'attente côté client.
     const headers: Record<string, string> = {
       ...corsHeaders,
       "Content-Type": "application/json",
@@ -68,10 +74,29 @@ Deno.serve(async (req) => {
     const retryAfter = resp.headers.get("retry-after");
     if (retryAfter) headers["Retry-After"] = retryAfter;
 
-    return new Response(JSON.stringify(data), {
-      status: resp.status,
-      headers,
-    });
+    if (resp.ok) {
+      // Succès : on propage la réponse Gemini telle quelle (format OpenAI).
+      return new Response(rawText, { status: resp.status, headers });
+    }
+
+    // Erreur : on log côté serveur (visible via `supabase functions logs chat`)
+    // et on renvoie TOUJOURS un message lisible + le détail brut au client, pour
+    // diagnostiquer (ex. 429 = quota Gemini : message exact « ...exhausted... »).
+    console.error(
+      `Gemini ${resp.status} ${resp.statusText} — retry-after=${retryAfter ?? "—"} — body=${rawText}`,
+    );
+    const d = data as { error?: { message?: string } | string } | null;
+    const geminiMsg =
+      d && typeof d.error === "object" && d.error?.message
+        ? d.error.message
+        : d && typeof d.error === "string"
+        ? d.error
+        : rawText || `Gemini a renvoyé le statut ${resp.status} sans détail.`;
+
+    return new Response(
+      JSON.stringify({ error: geminiMsg, status: resp.status, raw: data }),
+      { status: resp.status, headers },
+    );
   } catch (err) {
     return new Response(
       JSON.stringify({ error: (err as Error).message }),
