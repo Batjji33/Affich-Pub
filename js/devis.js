@@ -537,7 +537,7 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
         { key: 'telephone', label: 'le numéro de téléphone', ok: c => /^0\d{9}$/.test(String(c.telephone || '').replace(/[\s.\-]/g, '')), miss: 'un numéro de téléphone français valide (10 chiffres)', question: c => ask(c, 'quel est votre numéro de téléphone (06 ou 07, 10 chiffres) ?') },
         { key: 'objet', label: "l'objet de la publicité", ok: c => hasVal(c.objet) && !looksFake(c.objet), miss: "l'objet réel de la publicité", question: c => ask(c, "qu'aimeriez-vous promouvoir avec cette publicité ?") },
         { key: 'description', label: 'la description de la publicité', ok: c => String(c.description || '').trim().split(/\s+/).filter(Boolean).length >= 4, miss: 'une description un peu détaillée (couleurs, texte, visuels…)', question: c => ask(c, 'pouvez-vous me décrire un peu la publicité (couleurs, texte, visuels souhaités) ?') },
-        { key: 'budget', label: 'le budget', ok: c => { const b = parseFloat(String(c.budget).replace(',', '.')); return Number.isFinite(b) && b > 0; }, miss: 'un budget valide (en euros)', question: c => ask(c, 'quel budget envisagez-vous pour cette campagne (en euros) ?') },
+        { key: 'budget', label: 'le budget', ok: c => parseBudget(c.budget) !== null, miss: 'un budget valide (en euros)', question: c => ask(c, 'quel budget envisagez-vous pour cette campagne (en euros) ?') },
         { key: 'quantite', label: 'le nombre de publicités', ok: c => { const q = parseInt(c.quantite, 10); return Number.isFinite(q) && q >= 1 && q <= 50; }, miss: 'le nombre de publicités souhaitées (au moins 1)', question: c => ask(c, 'combien de publicités (affiches identiques) souhaitez-vous ?') },
         {
             key: 'emplacements', label: "l'emplacement de chaque publicité", ok: c => {
@@ -691,6 +691,17 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
     // ======================================================
     //  NORMALISATION + ESTIMATION TARIFAIRE
     // ======================================================
+    // Le client répond parfois par une fourchette ("100-150", "100 à 150€") plutôt
+    // qu'un montant unique : on prend la moyenne des deux bornes trouvées (sinon le
+    // seul nombre présent). Utilisé PARTOUT où le budget est lu, pour qu'une valeur
+    // jugée valide à la collecte soit toujours la même une fois sauvegardée/affichée.
+    function parseBudget(v) {
+        const nums = String(v || '').replace(',', '.').match(/\d+(?:\.\d+)?/g);
+        if (!nums || nums.length === 0) return null;
+        const vals = nums.map(Number);
+        const b = vals.length > 1 ? (vals[0] + vals[1]) / 2 : vals[0];
+        return Number.isFinite(b) && b > 0 ? b : null;
+    }
     function normFormat(v) {
         const s = (v || '').toLowerCase();
         return (s.includes('informatique') || s.includes('numérique') || s.includes('digital'))
@@ -899,7 +910,7 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
             format_diffusion: normFormat(d.format),
             objet_pub: d.objet || null,
             description_pub: d.description || null,
-            budget: Number.isFinite(+d.budget) ? parseFloat(d.budget) : null,
+            budget: parseBudget(d.budget),
             regularite: est.regularite,
             emplacement: est.emplacement,
             quantite: est.quantite,
