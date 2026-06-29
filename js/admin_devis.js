@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ======================================================
-    //  APPELS EDGE FUNCTIONS (Google Gemini 2.0 Flash)
+    //  APPELS EDGE FUNCTIONS (Google Gemini 2.5 Flash)
     // ======================================================
     const GEMINI_MODEL = 'gemini-2.5-flash';
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -114,10 +114,10 @@ document.addEventListener('DOMContentLoaded', () => {
             msg.includes('resource_exhausted');
     }
 
-    // Gemini 2.0 Flash gratuit : 15 requêtes/min. Chaque action admine (analyse,
+    // Gemini 2.5 Flash gratuit : 15 requêtes/min. Chaque action admin (analyse,
     // vrai devis, pub) = 1 requête ; en cas de 429 on réessaie avec un backoff.
     const MAX_RETRIES = 2;
-    async function callChatFn(messages, system) {
+    async function callChatFn(messages, system, maxTokens) {
         let attempt = 0;
         for (;;) {
             const res = await fetch(`${FN_BASE}/chat`, {
@@ -127,10 +127,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Authorization': `Bearer ${SUPABASE_KEY}`,
                     'apikey': SUPABASE_KEY
                 },
-                body: JSON.stringify({ system, messages, model: GEMINI_MODEL })
+                body: JSON.stringify({ system, messages, model: GEMINI_MODEL, max_tokens: maxTokens })
             });
             const data = await res.json().catch(() => ({}));
-            if (res.ok) return (data?.choices?.[0]?.message?.content || '').trim();
+            if (res.ok) {
+                const choice = data?.choices?.[0];
+                const content = (choice?.message?.content || '').trim();
+                // finish_reason "length" = réponse coupée par la limite de tokens :
+                // on le signale explicitement plutôt que de rendre un texte amputé
+                // sans prévenir (le bouton "Régénérer" permet de relancer).
+                if (choice?.finish_reason === 'length') {
+                    const err = new Error('La réponse a été tronquée (limite de tokens atteinte).');
+                    err.truncatedContent = content;
+                    throw err;
+                }
+                return content;
+            }
 
             if (isRateLimitStatus(res.status, data) && attempt < MAX_RETRIES) {
                 const retryAfter = parseInt(res.headers.get('Retry-After') || '', 10);
@@ -393,16 +405,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // ======================================================
     //  ACTION 1 — ANALYSER PAR IA
     // ======================================================
-    const ANALYSE_PROMPT = `Tu es un consultant expert en publicité. On te fournit les informations d'un devis ET la transcription de la conversation entre le client et l'assistant. Fournis un compte rendu clair et structuré, avec ces sections :
+    // Template STRICT et FIXE : mêmes 6 titres, dans le même ordre, à chaque
+    // analyse (cohérence visuelle + évite les réponses à rallonge qui risquaient
+    // d'être tronquées par la limite de tokens).
+    const ANALYSE_PROMPT = `Tu es un consultant expert en publicité chez Affich'Pub. On te fournit les informations d'un devis ET la transcription de la conversation entre le client et l'assistant. Tu rédiges un compte rendu pour le conseiller commercial qui va rappeler ce client.
 
-1. Profil client
-2. Objet et description de la publicité (besoins identifiés)
-3. Compte rendu du déroulement de la conversation : est-ce que l'échange s'est bien ou mal passé ? Le client a-t-il hésité, été confus, mécontent, pressé ? Y a-t-il eu des blocages, des incompréhensions, des tentatives de fausses informations ou de manipulation de l'assistant ? Des points positifs (client motivé, réponses claires) ?
-4. Points de vigilance (budget, description vague, dates, cohérence)
-5. Recommandations pour optimiser la campagne et pour le suivi commercial (ce que le conseiller devrait préparer / aborder lors du RDV)
-6. Score de qualité du devis sur 10
+Tu DOIS utiliser EXACTEMENT ce template, dans cet ordre, avec ces 6 titres tels quels (précédés de "## "), sans en ajouter, en supprimer ni les reformuler — même si une section est courte, ne JAMAIS la sauter :
 
-Sois concret et utile pour le conseiller qui rappellera le client.`;
+## Profil client
+(2-3 phrases : qui est le client, son projet en une phrase)
+
+## Objet et besoins identifiés
+(objet de la publicité et description du besoin, en quelques phrases)
+
+## Déroulement de la conversation
+(l'échange s'est-il bien passé ? hésitations, confusion, mécontentement, blocages, incompréhensions, tentatives de manipulation de l'assistant ? points positifs ?)
+
+## Points de vigilance
+(liste à puces : budget, description vague, dates, cohérence — écris "Aucun point de vigilance particulier." si rien à signaler)
+
+## Recommandations pour le RDV
+(liste à puces : ce que le conseiller doit préparer/aborder)
+
+## Score de qualité
+X/10 — (justification en une phrase)
+
+Règles : reste concret et concis (le conseiller doit pouvoir lire ce compte rendu en moins d'une minute) ; ne JAMAIS inventer d'information absente de la transcription ; respecte STRICTEMENT le template ci-dessus.`;
 
     // L'analyse est mise en cache (en mémoire sur `d`, et persistée en base) :
     // rouvrir la modale n'appelle PLUS l'IA — il faut cliquer explicitement sur
@@ -425,7 +453,8 @@ Sois concret et utile pour le conseiller qui rappellera le client.`;
                 "\n\n=== TRANSCRIPTION DE LA CONVERSATION ===\n" + conversationToText(d);
             const result = await callChatFn(
                 [{ role: 'user', content: userMsg }],
-                ANALYSE_PROMPT
+                ANALYSE_PROMPT,
+                4096 // budget généreux : un rapport en 6 sections ne doit jamais être tronqué
             );
             d.analyse_ia = result;
             d.analyse_ia_at = new Date().toISOString();
@@ -440,6 +469,18 @@ Sois concret et utile pour le conseiller qui rappellera le client.`;
             if (error) console.error('Sauvegarde analyse IA échouée', error);
         } catch (err) {
             body.innerHTML = `<div class="gen-error">⚠️ ${escapeHtml(err.message)}</div>`;
+            if (err.truncatedContent) {
+                // Réponse coupée par la limite de tokens : on montre tout de même
+                // ce qui a été généré (mieux que rien) + un bouton pour relancer.
+                const partial = document.createElement('div');
+                partial.innerHTML = formatRich(err.truncatedContent);
+                body.appendChild(partial);
+            }
+            const regenBtn = document.createElement('button');
+            regenBtn.className = 'btn btn-outline mt-2';
+            regenBtn.textContent = '🔄 Réessayer';
+            regenBtn.addEventListener('click', () => analyzeDevis(d, true));
+            body.appendChild(regenBtn);
         }
     }
 
