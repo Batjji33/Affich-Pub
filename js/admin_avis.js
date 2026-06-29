@@ -204,15 +204,59 @@ document.addEventListener('DOMContentLoaded', () => {
                     · ${fmtDate(c.created_at)}</span>
                 <span class="code-status ${c.utilise ? 'used' : 'free'}">${c.utilise ? 'Utilisé' : 'Disponible'}</span>
             `;
+            const actions = document.createElement('div');
+            actions.style.display = 'flex';
+            actions.style.gap = '6px';
+
             const copyBtn = document.createElement('button');
             copyBtn.className = 'icon-btn';
             copyBtn.textContent = '📋 Copier';
             copyBtn.disabled = c.utilise;
             copyBtn.addEventListener('click', () => copyCode(c.code, copyBtn));
-            chip.appendChild(copyBtn);
+            actions.appendChild(copyBtn);
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'icon-btn icon-btn-danger';
+            delBtn.textContent = '🗑️ Supprimer';
+            delBtn.title = 'Supprimer ce code';
+            delBtn.addEventListener('click', () => deleteCode(c, chip, delBtn));
+            actions.appendChild(delBtn);
+
+            chip.appendChild(actions);
 
             codesList.appendChild(chip);
         });
+    }
+
+    async function deleteCode(c, chip, btn) {
+        const warning = c.utilise
+            ? `Ce code a déjà été utilisé pour déposer un avis. Le supprimer effacera aussi l'avis associé (lien en cascade).\n\nSupprimer définitivement le code ${c.code} ?`
+            : `Supprimer définitivement le code ${c.code} ?`;
+        if (!confirm(warning)) return;
+
+        btn.disabled = true;
+        const copyBtnSibling = chip.querySelector('.icon-btn:not(.icon-btn-danger)');
+        if (copyBtnSibling) copyBtnSibling.disabled = true;
+        btn.textContent = '⏳…';
+
+        const { error } = await supabase.from('codes_avis').delete().eq('id', c.id);
+
+        if (error) {
+            alert('Erreur lors de la suppression : ' + error.message);
+            btn.disabled = false;
+            btn.textContent = '🗑️ Supprimer';
+            if (copyBtnSibling) copyBtnSibling.disabled = c.utilise;
+            return;
+        }
+
+        chip.remove();
+        if (!codesList.querySelector('.code-chip')) {
+            codesList.innerHTML =
+                `<div class="table-empty" style="padding:20px;">Aucun code généré pour l'instant.</div>`;
+        }
+        // Le code supprimé pouvait être lié à un avis (ON DELETE CASCADE) :
+        // on rafraîchit la liste des avis pour refléter une éventuelle suppression.
+        if (c.utilise) loadAvis();
     }
 
     function copyCode(code, btn) {
