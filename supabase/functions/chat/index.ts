@@ -60,6 +60,10 @@ function buildProviders(): Provider[] {
     //    (et non `max_tokens`). Si la réponse demandée est trop grande
     //    (ex. analyse admin à 8192), Cerebras échoue ou tronque — dans les
     //    deux cas on bascule sur le fournisseur suivant (cf. plus bas).
+    //    gpt-oss-120b fait du raisonnement interne (format "Harmony") qui peut
+    //    fuiter dans la réponse visible si on le laisse à son défaut ("medium") ;
+    //    reasoning_effort: "low" réduit ce risque ET économise du budget de
+    //    contexte (précieux vu le plafond de 8192 tokens).
     {
       name: "cerebras",
       url: "https://api.cerebras.ai/v1/chat/completions",
@@ -69,9 +73,11 @@ function buildProviders(): Provider[] {
         messages,
         temperature: TEMPERATURE,
         max_completion_tokens: Math.min(maxTokens, 4096),
+        reasoning_effort: "low",
       }),
     },
-    // 2) Groq — rapide, 1 000 req/jour.
+    // 2) Groq — rapide, 1 000 req/jour. Même mitigation de fuite de raisonnement
+    //    que Cerebras (même famille de modèle gpt-oss-120b).
     {
       name: "groq",
       url: "https://api.groq.com/openai/v1/chat/completions",
@@ -81,6 +87,7 @@ function buildProviders(): Provider[] {
         messages,
         temperature: TEMPERATURE,
         max_tokens: maxTokens,
+        reasoning_effort: "low",
       }),
     },
     // 3) Gemini — dernier recours (~20 req/jour). Les modèles 2.5+ font du
