@@ -424,6 +424,9 @@ Liste à puces EXHAUSTIVE de tout ce que le client a donné. Pour chaque sous-po
 - Logistique : budget, nombre de publicités, emplacement de chaque publicité, format (manuel/informatique), régularité d'entretien, dates de début et de fin
 - Autres précisions, contraintes, demandes spéciales ou remarques exprimées par le client
 
+## Design de la publicité
+Un paragraphe de synthèse (pas une simple liste) qui propose une direction artistique cohérente pour le visuel, basée UNIQUEMENT sur les éléments donnés par le client : palette de couleurs, style graphique, composition, ambiance/ton, éléments visuels à privilégier, traitement du texte/slogan. Si le brief créatif est trop pauvre pour dégager une direction précise, écris "Brief créatif insuffisant pour proposer une direction artistique précise — à clarifier au RDV (couleurs, style, visuels souhaités)." et liste ce qui manque pour pouvoir avancer.
+
 ## Déroulement de la conversation
 L'échange s'est-il bien passé ? Hésitations, confusion, mécontentement, blocages, incompréhensions, tentatives de fausses informations ou de manipulation du chatbot ? Points positifs (client motivé, réponses claires) ?
 
