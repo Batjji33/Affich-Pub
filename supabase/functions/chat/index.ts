@@ -15,10 +15,16 @@
 //  voit rien : il obtient une réponse tant qu'AU MOINS un fournisseur répond.
 //
 //  Ordre de priorité (le 1er disponible qui réussit gagne) :
-//    1) Cerebras  — ~1 000 000 tokens/JOUR gratuits (encaisse les contextes
-//                   longs « tout l'historique »).            model: llama-3.3-70b
-//    2) Groq      — 30 req/min, 1 000 req/JOUR, très rapide. model: llama-3.3-70b-versatile
+//    1) Cerebras  — 1 000 000 tokens/JOUR gratuits, mais contexte total
+//                   (prompt + réponse) plafonné à 8 192 tokens depuis la
+//                   réduction du palier gratuit (06/2026).  model: gpt-oss-120b
+//    2) Groq      — 30 req/min, 1 000 req/JOUR, très rapide. model: openai/gpt-oss-120b
 //    3) Gemini    — dernier recours (les ~20 req/jour résiduelles).
+//
+//  ⚠️ llama-3.3-70b (Cerebras) et llama-3.3-70b-versatile (Groq) ont été
+//  DÉPRÉCIÉS par leurs fournisseurs respectifs (27/05/2026 et 17/06/2026) —
+//  tout appel échouait, ce qui faisait retomber CHAQUE requête sur Gemini
+//  seul (d'où le blocage perçu malgré le routage). Remplacés par gpt-oss-120b.
 //
 //  Capacité gratuite totale par jour ≈ (Cerebras) + (Groq) + (Gemini),
 //  car chaque quota est séparé.
@@ -27,9 +33,6 @@
 //    CEREBRAS_API_KEY   (csk-...)   → https://cloud.cerebras.ai
 //    GROQ_API_KEY       (gsk-...)   → https://console.groq.com
 //    GEMINI_API_KEY     (AIza...)   → https://aistudio.google.com/app/apikey
-//
-//  ⚠️ Les noms de modèles ci-dessous sont des constantes en tête de fichier :
-//     si un fournisseur renomme un modèle, il suffit de changer la constante.
 // ============================================================
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -40,7 +43,6 @@ import { corsHeaders } from "../_shared/cors.ts";
 interface Provider {
   name: string;
   url: string;
-  model: string;
   apiKey: string | undefined;
   // Construit le corps de requête propre au fournisseur.
   buildPayload: (
@@ -53,28 +55,29 @@ const TEMPERATURE = 0.5;
 
 function buildProviders(): Provider[] {
   return [
-    // 1) Cerebras — le plus généreux en TOKENS/jour. ⚠️ utilise
-    //    `max_completion_tokens` (et non `max_tokens`).
+    // 1) Cerebras — généreux en TOKENS/jour, mais contexte total (prompt +
+    //    réponse) plafonné à 8 192 tokens. ⚠️ utilise `max_completion_tokens`
+    //    (et non `max_tokens`). Si la réponse demandée est trop grande
+    //    (ex. analyse admin à 8192), Cerebras échoue ou tronque — dans les
+    //    deux cas on bascule sur le fournisseur suivant (cf. plus bas).
     {
       name: "cerebras",
       url: "https://api.cerebras.ai/v1/chat/completions",
-      model: "llama-3.3-70b",
       apiKey: Deno.env.get("CEREBRAS_API_KEY"),
       buildPayload: (messages, maxTokens) => ({
-        model: "llama-3.3-70b",
+        model: "gpt-oss-120b",
         messages,
         temperature: TEMPERATURE,
-        max_completion_tokens: maxTokens,
+        max_completion_tokens: Math.min(maxTokens, 4096),
       }),
     },
     // 2) Groq — rapide, 1 000 req/jour.
     {
       name: "groq",
       url: "https://api.groq.com/openai/v1/chat/completions",
-      model: "llama-3.3-70b-versatile",
       apiKey: Deno.env.get("GROQ_API_KEY"),
       buildPayload: (messages, maxTokens) => ({
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
         messages,
         temperature: TEMPERATURE,
         max_tokens: maxTokens,
@@ -86,7 +89,6 @@ function buildProviders(): Provider[] {
     {
       name: "gemini",
       url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      model: "gemini-2.5-flash-lite",
       apiKey: Deno.env.get("GEMINI_API_KEY"),
       buildPayload: (messages, maxTokens) => ({
         model: "gemini-2.5-flash-lite",
@@ -99,9 +101,14 @@ function buildProviders(): Provider[] {
   ];
 }
 
-// Extrait un message d'erreur lisible d'une réponse fournisseur (JSON ou texte).
+// Extrait un message d'erreur lisible d'une réponse fournisseur. Les
+// fournisseurs OpenAI-compatible renvoient { error: {message} | string },
+// mais Gemini peut renvoyer son format NATIF (un tableau) sur certaines
+// erreurs (ex. 503 surcharge) même via l'endpoint OpenAI-compatible :
+// [{ error: { code, message, status } }].
 function readError(data: unknown, rawText: string, status: number): string {
-  const d = data as { error?: { message?: string } | string } | null;
+  const first = Array.isArray(data) ? data[0] : data;
+  const d = first as { error?: { message?: string } | string } | null;
   if (d && typeof d.error === "object" && d.error?.message) return d.error.message;
   if (d && typeof d.error === "string") return d.error;
   return rawText || `statut ${status} sans détail`;
@@ -123,7 +130,7 @@ Deno.serve(async (req) => {
       : messages;
 
     const maxTokens =
-      Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : 4096;
+      Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : 1024;
 
     // On ne garde que les fournisseurs dont la clé est configurée.
     const providers = buildProviders().filter((p) => !!p.apiKey);
@@ -138,11 +145,15 @@ Deno.serve(async (req) => {
       "Content-Type": "application/json",
     };
 
-    // On essaie chaque fournisseur dans l'ordre. Le 1er qui répond OK gagne ;
-    // sur échec (429 quota, 4xx, 5xx, réseau…) on bascule sur le suivant.
+    // On essaie chaque fournisseur dans l'ordre. Le 1er qui répond OK avec
+    // une réponse COMPLÈTE (finish_reason ≠ "length") gagne ; sur échec
+    // (429 quota, 4xx, 5xx, réseau, ou réponse tronquée) on bascule sur le
+    // suivant. Si tous tronquent, on renvoie quand même la meilleure
+    // réponse tronquée obtenue plutôt que rien.
     let lastStatus = 502;
     let lastError = "Aucun fournisseur n'a répondu.";
     let lastRetryAfter: string | null = null;
+    let truncatedFallback: { rawText: string; status: number; provider: string } | null = null;
 
     for (const p of providers) {
       try {
@@ -166,7 +177,19 @@ Deno.serve(async (req) => {
         }
 
         if (resp.ok) {
-          // Succès : on propage la réponse telle quelle (format OpenAI).
+          const choice = (data as { choices?: { finish_reason?: string }[] })
+            ?.choices?.[0];
+          if (choice?.finish_reason === "length") {
+            // Réponse coupée (contexte/quota de sortie trop court pour ce
+            // fournisseur) : on garde comme filet de secours et on essaie
+            // le suivant, qui a peut-être plus de marge.
+            console.error(`[${p.name}] réponse tronquée (finish_reason=length)`);
+            if (!truncatedFallback) {
+              truncatedFallback = { rawText, status: resp.status, provider: p.name };
+            }
+            continue;
+          }
+          // Succès complet : on propage la réponse telle quelle (format OpenAI).
           const headers = { ...baseHeaders };
           headers["X-AI-Provider"] = p.name; // utile pour diagnostiquer côté réseau
           return new Response(rawText, { status: resp.status, headers });
@@ -185,6 +208,17 @@ Deno.serve(async (req) => {
         lastError = (err as Error).message;
         console.error(`[${p.name}] exception — ${lastError}`);
       }
+    }
+
+    // Aucun fournisseur n'a donné de réponse complète. Si au moins un a
+    // renvoyé une réponse tronquée, c'est préférable à une erreur sèche.
+    if (truncatedFallback) {
+      const headers = { ...baseHeaders };
+      headers["X-AI-Provider"] = truncatedFallback.provider;
+      return new Response(truncatedFallback.rawText, {
+        status: truncatedFallback.status,
+        headers,
+      });
     }
 
     // Tous les fournisseurs ont échoué. On renvoie la dernière erreur connue

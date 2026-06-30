@@ -1,18 +1,21 @@
 /* ============================================
    DEVIS.JS — Chatbot Devis IA
-   Conversation Google Gemini 2.5 Flash-Lite (via
-   Edge Function), quick replies dynamiques,
-   détection de fin de devis, estimation tarifaire,
-   PDF (jsPDF) + sauvegarde Supabase.
+   Conversation IA (via Edge Function "chat", qui
+   route elle-même sur plusieurs fournisseurs gratuits
+   Cerebras → Groq → Gemini avec bascule auto), quick
+   replies dynamiques, détection de fin de devis,
+   estimation tarifaire, PDF (jsPDF) + sauvegarde Supabase.
 
-   Modèle : Gemini 2.5 Flash-Lite (palier gratuit).
-   (gemini-2.0-flash a été retiré par Google le
-   01/06/2026 ; 2.5-flash-lite retrouve un palier
-   aussi généreux que l'ancien 2.0-flash.)
-   Quota = 1 000 000 tokens/min mais SEULEMENT
-   15 requêtes/min. On envoie donc TOUT le contexte
-   (anti-oubli) et on régule le DÉBIT de requêtes
-   (voir RateLimiter + retry 429 plus bas).
+   Le palier gratuit Gemini de ce compte est bridé à
+   ~20 requêtes/JOUR : insuffisant seul. L'edge function
+   bascule donc d'abord sur Cerebras/Groq (quotas séparés,
+   bien plus généreux). Le client envoie uniquement
+   { system, messages } — c'est le SERVEUR qui choisit
+   le fournisseur/modèle. On régule quand même le DÉBIT
+   par visiteur (voir RateLimiter + retry 429 plus bas)
+   et on plafonne l'historique envoyé (MAX_HISTORY_MESSAGES)
+   pour économiser les quotas, sans perte d'info (l'état
+   complet est ré-injecté dans le system prompt à chaque tour).
    ============================================ */
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -16,13 +16,19 @@ via des **Edge Functions Supabase** (les clés API ne sont jamais exposées côt
 >
 > | Fournisseur | Priorité | Palier gratuit (par jour) | Modèle |
 > |---|---|---|---|
-> | **Cerebras** | 1 (principal) | **~1 000 000 tokens/jour** (encaisse les contextes longs) | `llama-3.3-70b` |
-> | **Groq** | 2 (secours) | **1 000 req/jour**, 30 req/min, très rapide | `llama-3.3-70b-versatile` |
+> | **Cerebras** | 1 (principal) | **1 000 000 tokens/jour**, mais contexte total (prompt+réponse) plafonné à 8192 tokens | `gpt-oss-120b` |
+> | **Groq** | 2 (secours) | **1 000 req/jour**, 30 req/min, très rapide | `openai/gpt-oss-120b` |
 > | **Gemini** | 3 (dernier recours) | ~20 req/jour résiduelles | `gemini-2.5-flash-lite` |
 >
 > Capacité gratuite totale ≈ somme des trois (quotas séparés). Tous exposent une **API
 > OpenAI-compatible** → la réponse garde le format `{ choices: [{ message: { content } }] }`,
 > donc le code client/admin n'a rien à changer côté parseur.
+>
+> ⚠️ **Les noms de modèles gratuits changent souvent** (dépréciations fréquentes chez Cerebras et
+> Groq — `llama-3.3-70b` / `llama-3.3-70b-versatile` ont par exemple été retirés mi-2026). Si le
+> chatbot se met soudainement à échouer après avoir bien fonctionné, vérifier en premier que les
+> modèles configurés dans `supabase/functions/chat/index.ts` sont toujours actifs chez chaque
+> fournisseur (leur page "Models"/"Deprecations").
 
 ---
 

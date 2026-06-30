@@ -93,11 +93,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // ======================================================
     //  APPELS EDGE FUNCTIONS (Google Gemini 2.5 Flash-Lite)
     // ======================================================
-    // gemini-2.0-flash a été retiré par Google le 01/06/2026 — on utilise
-    // gemini-2.5-flash-lite, qui a un palier gratuit large (15 req/min,
-    // 1500 req/jour, 1M tokens/min), contrairement à gemini-2.5-flash
-    // (non-lite) qui est bien plus serré (10 req/min, ~250 req/jour).
-    const GEMINI_MODEL = 'gemini-2.5-flash-lite';
+    // L'edge function "chat" route elle-même sur plusieurs fournisseurs
+    // gratuits (Cerebras → Groq → Gemini, bascule auto) : l'admin n'a plus
+    // besoin de préciser de modèle, juste { system, messages, max_tokens }.
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     // L'API renvoie parfois { error: { message, ... } } (objet) au lieu d'une
@@ -131,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Authorization': `Bearer ${SUPABASE_KEY}`,
                     'apikey': SUPABASE_KEY
                 },
-                body: JSON.stringify({ system, messages, model: GEMINI_MODEL, max_tokens: maxTokens })
+                body: JSON.stringify({ system, messages, max_tokens: maxTokens })
             });
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
