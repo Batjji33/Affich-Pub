@@ -6,7 +6,7 @@
 //  donc jamais lire la table codes_avis ni insérer un avis
 //  directement : impossible d'énumérer/deviner un code valide.
 //
-//  Étapes :
+//  Étapes (dépôt complet, body.check absent ou false) :
 //    1. Valider les entrées (code 4 chiffres, titre, note 1-5).
 //    2. Vérifier que le code existe.
 //    3. RÉCLAMER le code de façon atomique (PATCH conditionné sur
@@ -16,6 +16,17 @@
 //       garantissant qu'un code ne sert jamais à plus d'un avis.
 //    4. Insérer l'avis. En cas d'échec, on annule la réclamation
 //       (remet utilise=false) pour ne pas perdre le code.
+//
+//  Mode vérification (body = { code, check: true }) :
+//    Le front l'utilise dès la saisie du code (étape 1 du formulaire),
+//    AVANT de demander titre/description/note, pour afficher une erreur
+//    immédiate si le code est invalide ou déjà utilisé. On se contente
+//    d'un lookup en lecture seule : le code n'est PAS réclamé ici (la
+//    réclamation définitive a lieu uniquement à la publication réelle,
+//    à l'étape 3 ci-dessus) — ça laisse une toute petite fenêtre où un
+//    code "validé" en étape 1 pourrait être pris entre-temps, mais ce
+//    cas est déjà géré : la publication finale revérifie tout et
+//    renvoie 409 si besoin (voir js/avis.js).
 //
 //  Réponses :
 //    200 { ok: true }
@@ -60,6 +71,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const code = String(body.code ?? "").trim();
+    const checkOnly = body.check === true;
     const titre = String(body.titre ?? "").trim();
     const description = String(body.description ?? "").trim();
     const note = Number(body.note);
@@ -68,14 +80,16 @@ Deno.serve(async (req) => {
     if (!/^[0-9]{4}$/.test(code)) {
       return json({ error: "Le code doit comporter exactement 4 chiffres." }, 400);
     }
-    if (!titre) {
-      return json({ error: "Le titre est obligatoire." }, 400);
-    }
-    if (!description) {
-      return json({ error: "La description est obligatoire." }, 400);
-    }
-    if (!Number.isInteger(note) || note < 1 || note > 5) {
-      return json({ error: "La note doit être comprise entre 1 et 5 étoiles." }, 400);
+    if (!checkOnly) {
+      if (!titre) {
+        return json({ error: "Le titre est obligatoire." }, 400);
+      }
+      if (!description) {
+        return json({ error: "La description est obligatoire." }, 400);
+      }
+      if (!Number.isInteger(note) || note < 1 || note > 5) {
+        return json({ error: "La note doit être comprise entre 1 et 5 étoiles." }, 400);
+      }
     }
 
     // 2) Le code existe-t-il ?
@@ -92,6 +106,15 @@ Deno.serve(async (req) => {
       return json({ error: "Ce code est invalide. Vérifiez le code reçu avec votre devis." }, 404);
     }
     const found = rows[0];
+
+    // Mode vérification : lookup en lecture seule, on s'arrête ici sans
+    // réclamer ni écrire quoi que ce soit.
+    if (checkOnly) {
+      if (found.utilise) {
+        return json({ error: "Ce code a déjà été utilisé pour déposer un avis." }, 409);
+      }
+      return json({ ok: true });
+    }
 
     // 3) Réclamation atomique du code : la condition "utilise=is.false"
     //    fait que ce PATCH ne peut réussir qu'une seule fois, même si
