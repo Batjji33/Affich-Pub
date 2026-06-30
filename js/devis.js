@@ -1,11 +1,14 @@
 /* ============================================
    DEVIS.JS — Chatbot Devis IA
-   Conversation Google Gemini 2.0 Flash (via Edge
-   Function), quick replies dynamiques, détection
-   de fin de devis, estimation tarifaire, PDF
-   (jsPDF) + sauvegarde Supabase.
+   Conversation Google Gemini 2.5 Flash-Lite (via
+   Edge Function), quick replies dynamiques,
+   détection de fin de devis, estimation tarifaire,
+   PDF (jsPDF) + sauvegarde Supabase.
 
-   Modèle : Gemini 2.0 Flash (palier gratuit).
+   Modèle : Gemini 2.5 Flash-Lite (palier gratuit).
+   (gemini-2.0-flash a été retiré par Google le
+   01/06/2026 ; 2.5-flash-lite retrouve un palier
+   aussi généreux que l'ancien 2.0-flash.)
    Quota = 1 000 000 tokens/min mais SEULEMENT
    15 requêtes/min. On envoie donc TOUT le contexte
    (anti-oubli) et on régule le DÉBIT de requêtes
@@ -236,12 +239,14 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
     // ======================================================
     //  APPEL GEMINI (Edge Function "chat") + GESTION DU DÉBIT
     // ======================================================
-    // Gemini 2.0 Flash gratuit : 1M tokens/min mais 15 requêtes/min
-    // (et 1500 requêtes/jour). On choisit 2.0-flash plutôt que 2.5-flash dont
-    // le palier gratuit est bien plus serré (10 req/min, ~250/jour).
+    // gemini-2.0-flash a été retiré par Google le 01/06/2026 (tout appel échoue
+    // désormais) — on utilise gemini-2.5-flash-lite, qui retrouve un palier
+    // gratuit aussi généreux que l'ancien 2.0-flash : 1M tokens/min et
+    // 15 requêtes/min (1500/jour). gemini-2.5-flash (non-lite) est bien plus
+    // serré (10 req/min, ~250/jour) : à éviter pour cet usage.
     // → On envoie l'historique COMPLET (anti-oubli : le modèle garde tout le
     //   contexte) et on TEMPORISE de façon proactive le débit de requêtes.
-    const GEMINI_MODEL = 'gemini-2.0-flash';
+    const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
     // Note d'attente affichée sous l'indicateur de frappe (ex. patientement 429).
     function setTypingNote(text) {

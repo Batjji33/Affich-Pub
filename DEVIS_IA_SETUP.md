@@ -1,13 +1,16 @@
 # Devis IA — Guide de déploiement
 
 Fonctionnalité « Mon Devis IA » + page admin « Devis » pour Affich'Pub.
-IA 100 % gratuite : **Google Gemini 2.0 Flash** (texte) et **Pollinations.ai** (images, aucune clé requise),
+IA 100 % gratuite : **Google Gemini 2.5 Flash-Lite** (texte) et **Pollinations.ai** (images, aucune clé requise),
 via des **Edge Functions Supabase** (les clés API ne sont jamais exposées côté client).
 
-> **Pourquoi Gemini 2.0 Flash ?** Le palier gratuit offre **1 000 000 tokens/minute** (au lieu des
-> limites strictes de Groq/Llama qui bloquaient trop vite). La seule contrainte restante est de
-> **15 requêtes/minute** : elle est gérée côté client (limiteur de débit + nouvelle tentative
-> automatique en cas de 429) et côté admin (retry sur les actions IA).
+> **Pourquoi Gemini 2.5 Flash-Lite ?** `gemini-2.0-flash` a été **définitivement retiré par Google
+> le 01/06/2026** (tout appel à ce modèle échoue désormais). `gemini-2.5-flash-lite` est le modèle
+> qui retrouve un palier gratuit aussi généreux que l'ancien 2.0-flash : **1 000 000 tokens/minute**
+> et **15 requêtes/minute** (1500/jour). `gemini-2.5-flash` (non-lite) a un palier bien plus serré
+> (10 req/min, ~250/jour) — à éviter pour cet usage. La contrainte de 15 req/min est gérée côté
+> client (limiteur de débit + nouvelle tentative automatique en cas de 429) et côté admin (retry
+> sur les actions IA).
 
 ---
 
@@ -76,7 +79,7 @@ admin_devis.html        Page admin (auth Supabase + tableau + modales)
 js/admin_devis.js       Auth, tableau, statut éditable, 3 actions IA (Gemini)
 css/style.css           + section « CHATBOT DEVIS IA » (réutilise le design system existant)
 supabase/schema.sql     Table devis + RLS
-supabase/functions/chat/index.ts     Proxy Gemini 2.0 Flash (endpoint OpenAI-compatible, relais 429 + Retry-After)
+supabase/functions/chat/index.ts     Proxy Gemini 2.5 Flash-Lite (endpoint OpenAI-compatible, relais 429 + Retry-After)
 supabase/functions/gen-ad/index.ts   Proxy Pollinations.ai (image → base64, sans clé)
 supabase/functions/_shared/cors.ts   En-têtes CORS partagés
 ```

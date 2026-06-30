@@ -1,24 +1,25 @@
 // ============================================================
-//  Edge Function "chat" — Proxy Google Gemini 2.0 Flash
+//  Edge Function "chat" — Proxy Google Gemini 2.5 Flash-Lite
 //  Reçoit { messages, system } et relaie vers l'endpoint
 //  OpenAI-compatible de Gemini. La réponse conserve le format
 //  OpenAI ({ choices: [{ message: { content } }] }), si bien que
 //  le code client/admin n'a pas besoin de changer de parseur.
 //
-//  Choix du modèle : gemini-2.0-flash (et NON 2.5-flash) car son palier
-//  gratuit est BEAUCOUP plus généreux — décisif pour ne pas bloquer :
-//    • 2.0-flash : 15 req/min, 1500 req/JOUR, 1 000 000 tokens/min
-//    • 2.5-flash :  10 req/min,  ~250 req/JOUR,  250 000 tokens/min
-//  (Google a réduit les quotas gratuits de 50-80% en déc. 2025.)
+//  ⚠️ gemini-2.0-flash a été DÉFINITIVEMENT RETIRÉ par Google le 01/06/2026
+//  (déprécié depuis le 18/02/2026) — tout appel à ce nom de modèle échoue
+//  désormais. gemini-2.5-flash (non-lite) a un palier gratuit bien plus
+//  serré (10 req/min, ~250 req/JOUR, 250 000 tokens/min).
+//  → On utilise gemini-2.5-flash-lite, qui retrouve un palier gratuit aussi
+//  généreux que l'ancien 2.0-flash :
+//    15 req/min, 1500 req/JOUR, 1 000 000 tokens/min.
 //  La contrainte qui reste est le NOMBRE de requêtes : géré côté client
 //  (temporisation proactive + retry sur 429 avec Retry-After relayé).
-//  Bonus : 2.0-flash n'a pas de "thinking", donc aucune réponse tronquée.
 // ============================================================
 import { corsHeaders } from "../_shared/cors.ts";
 
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-const DEFAULT_MODEL = "gemini-2.0-flash";
+const DEFAULT_MODEL = "gemini-2.5-flash-lite";
 
 Deno.serve(async (req) => {
   // Préflight CORS
@@ -57,8 +58,8 @@ Deno.serve(async (req) => {
 
     // Les modèles 2.5+ font du "thinking" interne par défaut, qui consomme une
     // partie du budget max_tokens AVANT la réponse visible (risque de troncature).
-    // On le désactive UNIQUEMENT pour ces modèles ; inutile sur 2.0-flash (pas de
-    // thinking) où envoyer ce paramètre pourrait être refusé.
+    // On le désactive pour ces modèles (dont gemini-2.5-flash-lite, notre modèle
+    // par défaut) ; ce paramètre n'est envoyé que si pertinent pour le modèle choisi.
     if (chosenModel.includes("2.5") || chosenModel.includes("thinking")) {
       payload.reasoning_effort = "none";
     }

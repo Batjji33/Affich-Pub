@@ -91,11 +91,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ======================================================
-    //  APPELS EDGE FUNCTIONS (Google Gemini 2.0 Flash)
+    //  APPELS EDGE FUNCTIONS (Google Gemini 2.5 Flash-Lite)
     // ======================================================
-    // 2.0-flash : palier gratuit bien plus large que 2.5-flash
-    // (15 req/min, 1500 req/jour, 1M tokens/min) → on évite les blocages.
-    const GEMINI_MODEL = 'gemini-2.0-flash';
+    // gemini-2.0-flash a été retiré par Google le 01/06/2026 — on utilise
+    // gemini-2.5-flash-lite, qui a un palier gratuit large (15 req/min,
+    // 1500 req/jour, 1M tokens/min), contrairement à gemini-2.5-flash
+    // (non-lite) qui est bien plus serré (10 req/min, ~250 req/jour).
+    const GEMINI_MODEL = 'gemini-2.5-flash-lite';
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     // L'API renvoie parfois { error: { message, ... } } (objet) au lieu d'une
@@ -116,8 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
             msg.includes('resource_exhausted');
     }
 
-    // Gemini 2.0 Flash gratuit : 15 requêtes/min. Chaque action admin (analyse,
-    // vrai devis, pub) = 1 requête ; en cas de 429 on réessaie avec un backoff.
+    // Gemini 2.5 Flash-Lite gratuit : 15 requêtes/min. Chaque action admin
+    // (analyse, vrai devis, pub) = 1 requête ; en cas de 429 on réessaie avec un backoff.
     const MAX_RETRIES = 2;
     async function callChatFn(messages, system, maxTokens) {
         let attempt = 0;
