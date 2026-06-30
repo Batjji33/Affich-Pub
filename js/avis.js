@@ -91,9 +91,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // La RLS limite déjà les visiteurs anonymes aux avis visibles, mais
+        // on filtre AUSSI explicitement ici : intention claire, robuste si la
+        // RLS venait à changer, et la moyenne ne comptera jamais un avis masqué.
         const { data, error } = await supabase
             .from('avis')
             .select('titre, resume, note, created_at')
+            .eq('visible', true)
             .order('created_at', { ascending: false });
 
         if (error) {
