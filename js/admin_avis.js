@@ -363,16 +363,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function toggleVisible(a, tr, btn) {
         btn.disabled = true;
-        const { error } = await supabase.from('avis')
+        // .select() force PostgREST à renvoyer la ligne modifiée : sans lui,
+        // une mise à jour bloquée par la RLS (session expirée, droits
+        // insuffisants…) NE PRODUIT AUCUNE ERREUR — elle réussit
+        // silencieusement avec 0 ligne affectée, et l'interface mentirait
+        // en affichant « Masqué » alors que rien n'a été écrit en base.
+        const { data, error } = await supabase.from('avis')
             .update({ visible: !a.visible })
-            .eq('id', a.id);
+            .eq('id', a.id)
+            .select('visible');
         btn.disabled = false;
 
         if (error) {
             alert('Erreur : ' + error.message);
             return;
         }
-        a.visible = !a.visible;
+        if (!data || data.length === 0) {
+            alert(
+                "La modification n'a pas pu être appliquée (session expirée ou droits insuffisants). " +
+                'Reconnectez-vous et réessayez.'
+            );
+            return;
+        }
+        a.visible = data[0].visible;
         // On reconstruit la ligne pour refléter le nouvel état
         tr.replaceWith(buildRow(a));
     }
