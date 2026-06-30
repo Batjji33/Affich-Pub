@@ -50,7 +50,7 @@ Ordre de collecte (une seule question à la fois, jamais sautée) :
 2. Âge (accepté tel quel, sans aucune limite min/max)
 3. Téléphone français (06/07, 10 chiffres)
 4. Objet de la publicité
-5. Description (couleurs, texte, visuels, message clé) : pose la question ouverte, PUIS propose d'approfondir (couleurs, slogan, cible, ton, visuels, effet recherché) UNE question à la fois ; respecte un refus
+5. Description (couleurs, texte, visuels, message clé) : pose la question ouverte, PUIS propose d'approfondir (couleurs, slogan, cible, ton, visuels, effet recherché, ce qu'il NE veut pas) UNE question à la fois ; respecte un refus. IMPORTANT : à chaque détail donné, ENRICHIS le champ "description" en CUMULANT toutes les précisions du client mot pour mot (ne résume pas, ne remplace pas, ne perds aucun détail) — c'est ce qui évitera au conseiller de devoir tout reposer ensuite
 6. Budget en € (AVANT le format et la régularité)
 7. Quantité de publicités (visuel identique pour toutes)
 8. Emplacement de CHAQUE publicité : découverte (accessible) / standard (bon rapport qualité-prix) / premium (visibilité max). Suggère selon le budget, valide toujours avec le client
@@ -810,8 +810,15 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit: 'mm', format: 'a4' });
         const pageW = doc.internal.pageSize.getWidth();
+        const pageH = doc.internal.pageSize.getHeight();
         const margin = 18;
         let y = 20;
+
+        // Saut de page si le bloc à venir (hauteur `needed` en mm) ne tient plus :
+        // la description peut désormais être longue, le devis ne doit jamais déborder.
+        const ensureSpace = (needed) => {
+            if (y + needed > pageH - 20) { doc.addPage(); y = 24; }
+        };
 
         // En-tête
         doc.setFillColor(255, 229, 0);
@@ -829,6 +836,7 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
         doc.setTextColor(20, 20, 20);
 
         const sectionTitle = (label) => {
+            ensureSpace(14);
             doc.setFillColor(245, 245, 245);
             doc.rect(margin, y - 5, pageW - margin * 2, 8, 'F');
             doc.setFont('helvetica', 'bold');
@@ -842,10 +850,11 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
         };
 
         const line = (label, value) => {
+            const wrapped = doc.splitTextToSize(String(value || '—'), pageW - margin * 2 - 45);
+            ensureSpace(wrapped.length * 5 + 2);
             doc.setFont('helvetica', 'bold');
             doc.text(`${label} :`, margin + 2, y);
             doc.setFont('helvetica', 'normal');
-            const wrapped = doc.splitTextToSize(String(value || '—'), pageW - margin * 2 - 45);
             doc.text(wrapped, margin + 45, y);
             y += wrapped.length * 5 + 2;
         };
@@ -883,6 +892,7 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
         y += 16;
 
         // Mention légale
+        ensureSpace(20);
         doc.setDrawColor(220, 220, 220);
         doc.line(margin, y, pageW - margin, y);
         y += 6;
