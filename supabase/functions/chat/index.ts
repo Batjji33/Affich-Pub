@@ -1,23 +1,24 @@
 // ============================================================
-//  Edge Function "chat" — Proxy Google Gemini 2.5 Flash
+//  Edge Function "chat" — Proxy Google Gemini 2.0 Flash
 //  Reçoit { messages, system } et relaie vers l'endpoint
 //  OpenAI-compatible de Gemini. La réponse conserve le format
 //  OpenAI ({ choices: [{ message: { content } }] }), si bien que
 //  le code client/admin n'a pas besoin de changer de parseur.
 //
-//  Limites du palier gratuit Gemini 2.5 Flash :
-//    • 1 000 000 tokens / minute  → l'optimisation des tokens
-//      n'est plus un enjeu : on envoie tout le contexte utile.
-//    • 15 requêtes / minute        → c'est LA contrainte à gérer.
-//      En cas de dépassement, Gemini renvoie 429 ; on relaie le
-//      statut et l'en-tête Retry-After pour que le client puisse
-//      patienter puis réessayer proprement.
+//  Choix du modèle : gemini-2.0-flash (et NON 2.5-flash) car son palier
+//  gratuit est BEAUCOUP plus généreux — décisif pour ne pas bloquer :
+//    • 2.0-flash : 15 req/min, 1500 req/JOUR, 1 000 000 tokens/min
+//    • 2.5-flash :  10 req/min,  ~250 req/JOUR,  250 000 tokens/min
+//  (Google a réduit les quotas gratuits de 50-80% en déc. 2025.)
+//  La contrainte qui reste est le NOMBRE de requêtes : géré côté client
+//  (temporisation proactive + retry sur 429 avec Retry-After relayé).
+//  Bonus : 2.0-flash n'a pas de "thinking", donc aucune réponse tronquée.
 // ============================================================
 import { corsHeaders } from "../_shared/cors.ts";
 
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-2.0-flash";
 
 Deno.serve(async (req) => {
   // Préflight CORS
@@ -41,28 +42,34 @@ Deno.serve(async (req) => {
       ? [{ role: "system", content: system }, ...messages]
       : messages;
 
+    const chosenModel = model || DEFAULT_MODEL;
+
+    const payload: Record<string, unknown> = {
+      model: chosenModel,
+      messages: finalMessages,
+      temperature: 0.5,
+      // Quota de 1M tokens/min : on peut laisser des réponses confortables
+      // sans craindre la limite de débit (qui se compte en requêtes).
+      // Par défaut généreux (un rapport d'analyse structuré peut être long) ;
+      // un appelant peut demander plus via { max_tokens } dans le corps.
+      max_tokens: Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : 4096,
+    };
+
+    // Les modèles 2.5+ font du "thinking" interne par défaut, qui consomme une
+    // partie du budget max_tokens AVANT la réponse visible (risque de troncature).
+    // On le désactive UNIQUEMENT pour ces modèles ; inutile sur 2.0-flash (pas de
+    // thinking) où envoyer ce paramètre pourrait être refusé.
+    if (chosenModel.includes("2.5") || chosenModel.includes("thinking")) {
+      payload.reasoning_effort = "none";
+    }
+
     const resp = await fetch(GEMINI_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${GEMINI_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: model || DEFAULT_MODEL,
-        messages: finalMessages,
-        temperature: 0.5,
-        // Quota de 1M tokens/min : on peut laisser des réponses confortables
-        // sans craindre la limite de débit (qui se compte en requêtes).
-        // Par défaut généreux (un rapport d'analyse structuré peut être long) ;
-        // un appelant peut demander plus via { max_tokens } dans le corps.
-        max_tokens: Number.isFinite(max_tokens) && max_tokens > 0 ? max_tokens : 4096,
-        // Gemini 2.5 Flash fait du "thinking" interne par défaut, qui consomme
-        // une partie du budget max_tokens AVANT la réponse visible — au risque
-        // de la tronquer. Nos usages (suivre des consignes, produire un texte
-        // structuré) n'ont pas besoin de ce raisonnement étendu : on le désactive
-        // pour garantir une réponse complète et plus rapide.
-        reasoning_effort: "none",
-      }),
+      body: JSON.stringify(payload),
     });
 
     // On lit d'abord en TEXTE : Gemini peut renvoyer une erreur non-JSON (HTML,

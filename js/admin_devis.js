@@ -91,9 +91,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ======================================================
-    //  APPELS EDGE FUNCTIONS (Google Gemini 2.5 Flash)
+    //  APPELS EDGE FUNCTIONS (Google Gemini 2.0 Flash)
     // ======================================================
-    const GEMINI_MODEL = 'gemini-2.5-flash';
+    // 2.0-flash : palier gratuit bien plus large que 2.5-flash
+    // (15 req/min, 1500 req/jour, 1M tokens/min) → on évite les blocages.
+    const GEMINI_MODEL = 'gemini-2.0-flash';
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     // L'API renvoie parfois { error: { message, ... } } (objet) au lieu d'une
@@ -114,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
             msg.includes('resource_exhausted');
     }
 
-    // Gemini 2.5 Flash gratuit : 15 requêtes/min. Chaque action admin (analyse,
+    // Gemini 2.0 Flash gratuit : 15 requêtes/min. Chaque action admin (analyse,
     // vrai devis, pub) = 1 requête ; en cas de 429 on réessaie avec un backoff.
     const MAX_RETRIES = 2;
     async function callChatFn(messages, system, maxTokens) {

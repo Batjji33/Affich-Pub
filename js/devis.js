@@ -236,10 +236,12 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
     // ======================================================
     //  APPEL GEMINI (Edge Function "chat") + GESTION DU DÉBIT
     // ======================================================
-    // Gemini 2.0 Flash gratuit : 1M tokens/min mais 15 requêtes/min.
+    // Gemini 2.0 Flash gratuit : 1M tokens/min mais 15 requêtes/min
+    // (et 1500 requêtes/jour). On choisit 2.0-flash plutôt que 2.5-flash dont
+    // le palier gratuit est bien plus serré (10 req/min, ~250/jour).
     // → On envoie l'historique COMPLET (anti-oubli : le modèle garde tout le
-    //   contexte) et on régule strictement le NOMBRE de requêtes par minute.
-    const GEMINI_MODEL = 'gemini-2.5-flash';
+    //   contexte) et on TEMPORISE de façon proactive le débit de requêtes.
+    const GEMINI_MODEL = 'gemini-2.0-flash';
 
     // Note d'attente affichée sous l'indicateur de frappe (ex. patientement 429).
     function setTypingNote(text) {
@@ -255,24 +257,44 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
         scrollToBottom();
     }
 
-    // --- Limiteur de débit côté client (fenêtre glissante de 60 s) ---
-    // Empêche un même visiteur de dépasser 15 req/min en enchaînant les envois.
-    // La clé API étant partagée entre tous les visiteurs, un 429 reste possible
-    // (plusieurs personnes simultanément) : il est alors rattrapé par le retry.
+    // --- Limiteur de débit côté client (TEMPORISATION PROACTIVE) ---
+    // Objectif : éviter d'ATTEINDRE la limite Gemini plutôt que de la subir.
+    // Deux garde-fous combinés :
+    //   1) Plafond glissant sur 60 s, volontairement SOUS la vraie limite
+    //      (12 < 15 req/min) pour garder une marge — la clé API étant partagée
+    //      entre tous les visiteurs, on ne consomme pas tout le quota à soi seul.
+    //   2) Espacement minimal entre deux requêtes (lissage), pour ne jamais
+    //      envoyer de rafale même si l'utilisateur enchaîne très vite.
+    // Si l'attente est nécessaire, `onWait` affiche un message discret.
     const RateLimiter = (() => {
-        const MAX_PER_MIN = 15;
+        const MAX_PER_MIN = 12;    // marge de sécurité sous la limite réelle (15)
         const WINDOW_MS = 60_000;
-        const SAFETY_MS = 300;     // marge pour absorber la latence réseau
+        const MIN_GAP_MS = 1500;   // espacement minimal entre 2 requêtes
+        const SAFETY_MS = 400;     // marge pour absorber la latence réseau
         const times = [];          // horodatages des requêtes récentes
+        let lastAt = 0;            // horodatage de la dernière requête lancée
 
         async function acquire(onWait) {
             for (;;) {
                 const now = Date.now();
                 while (times.length && now - times[0] >= WINDOW_MS) times.shift();
-                if (times.length < MAX_PER_MIN) { times.push(Date.now()); return; }
-                const wait = WINDOW_MS - (now - times[0]) + SAFETY_MS;
-                if (onWait) onWait(wait);
-                await sleep(wait);
+
+                // (1) plafond glissant atteint → attendre la libération d'un créneau
+                if (times.length >= MAX_PER_MIN) {
+                    const wait = WINDOW_MS - (now - times[0]) + SAFETY_MS;
+                    if (onWait) onWait(wait);
+                    await sleep(wait);
+                    continue;
+                }
+                // (2) espacement minimal depuis la dernière requête
+                const sinceLast = now - lastAt;
+                if (lastAt && sinceLast < MIN_GAP_MS) {
+                    await sleep(MIN_GAP_MS - sinceLast);
+                    continue;
+                }
+                lastAt = Date.now();
+                times.push(lastAt);
+                return;
             }
         }
         return { acquire };
