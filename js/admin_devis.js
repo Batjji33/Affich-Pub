@@ -405,32 +405,41 @@ document.addEventListener('DOMContentLoaded', () => {
     // ======================================================
     //  ACTION 1 — ANALYSER PAR IA
     // ======================================================
-    // Template STRICT et FIXE : mêmes 6 titres, dans le même ordre, à chaque
-    // analyse (cohérence visuelle + évite les réponses à rallonge qui risquaient
-    // d'être tronquées par la limite de tokens).
-    const ANALYSE_PROMPT = `Tu es un consultant expert en publicité chez Affich'Pub. On te fournit les informations d'un devis ET la transcription de la conversation entre le client et l'assistant. Tu rédiges un compte rendu pour le conseiller commercial qui va rappeler ce client.
+    // Template STRICT et FIXE (mêmes titres, même ordre, à chaque analyse).
+    // OBJECTIF MÉTIER : le directeur ne doit JAMAIS avoir à reposer au client une
+    // question à laquelle il a déjà répondu dans le chatbot. L'analyse doit donc
+    // RESTITUER l'intégralité des infos données (le "Brief complet"), puis ne
+    // lister en "Questions à clarifier" QUE ce qui manque réellement.
+    const ANALYSE_PROMPT = `Tu prépares le rendez-vous du directeur d'Affich'Pub avec un prospect. On te fournit les informations structurées du devis ET la transcription COMPLÈTE de la conversation entre le client et le chatbot.
 
-Tu DOIS utiliser EXACTEMENT ce template, dans cet ordre, avec ces 6 titres tels quels (précédés de "## "), sans en ajouter, en supprimer ni les reformuler — même si une section est courte, ne JAMAIS la sauter :
+OBJECTIF CAPITAL : le directeur ne doit JAMAIS reposer au client une question à laquelle il a déjà répondu dans le chatbot. Tu dois donc EXTRAIRE et RESTITUER absolument TOUTE information donnée par le client, même un détail mineur (préférence de couleur, mot du slogan, contrainte de date, horaire, nom d'entreprise, remarque, hésitation, demande spéciale...). Ne résume jamais au point de perdre un détail : en cas de doute, INCLUS l'information. N'invente RIEN qui ne soit pas dans la transcription.
 
-## Profil client
-(2-3 phrases : qui est le client, son projet en une phrase)
+Tu DOIS utiliser EXACTEMENT ce template, dans cet ordre, avec ces titres tels quels (précédés de "## "), sans en ajouter, en supprimer ni les reformuler — ne JAMAIS sauter une section :
 
-## Objet et besoins identifiés
-(objet de la publicité et description du besoin, en quelques phrases)
+## Brief complet du client
+Liste à puces EXHAUSTIVE de tout ce que le client a donné. Pour chaque sous-point non abordé par le client, écris "(non précisé)" — ne l'invente pas :
+- Identité & contact (nom, prénom, âge, téléphone)
+- Projet / objet de la publicité
+- Brief créatif — restitue TOUS les détails donnés : couleurs, slogan/texte exact, visuels/images souhaités, public cible, ton/ambiance, effet recherché, références ou exemples cités, ce qu'il NE veut PAS
+- Logistique : budget, nombre de publicités, emplacement de chaque publicité, format (manuel/informatique), régularité d'entretien, dates de début et de fin
+- Autres précisions, contraintes, demandes spéciales ou remarques exprimées par le client
 
 ## Déroulement de la conversation
-(l'échange s'est-il bien passé ? hésitations, confusion, mécontentement, blocages, incompréhensions, tentatives de manipulation de l'assistant ? points positifs ?)
+L'échange s'est-il bien passé ? Hésitations, confusion, mécontentement, blocages, incompréhensions, tentatives de fausses informations ou de manipulation du chatbot ? Points positifs (client motivé, réponses claires) ?
 
 ## Points de vigilance
-(liste à puces : budget, description vague, dates, cohérence — écris "Aucun point de vigilance particulier." si rien à signaler)
+Liste à puces (budget réaliste ?, description vague ?, dates cohérentes ?, incohérences). Écris "Aucun point de vigilance particulier." si rien à signaler.
+
+## Questions à clarifier au RDV
+Liste à puces UNIQUEMENT des informations que le client n'a PAS précisées ou qui restent ambiguës, pour que le directeur sache exactement quoi demander — NE remets PAS ici ce qui est déjà connu. Écris "Le client a déjà tout précisé." si rien ne manque.
 
 ## Recommandations pour le RDV
-(liste à puces : ce que le conseiller doit préparer/aborder)
+Liste à puces : ce que le directeur devrait préparer / aborder / proposer.
 
 ## Score de qualité
-X/10 — (justification en une phrase)
+X/10 — justification en une phrase.
 
-Règles : reste concret et concis (le conseiller doit pouvoir lire ce compte rendu en moins d'une minute) ; ne JAMAIS inventer d'information absente de la transcription ; respecte STRICTEMENT le template ci-dessus.`;
+Sois concret et utile. Le "Brief complet" peut être long (c'est voulu, rien ne doit être perdu) ; les autres sections restent synthétiques.`;
 
     // L'analyse est mise en cache (en mémoire sur `d`, et persistée en base) :
     // rouvrir la modale n'appelle PLUS l'IA — il faut cliquer explicitement sur
@@ -454,7 +463,7 @@ Règles : reste concret et concis (le conseiller doit pouvoir lire ce compte ren
             const result = await callChatFn(
                 [{ role: 'user', content: userMsg }],
                 ANALYSE_PROMPT,
-                4096 // budget généreux : un rapport en 6 sections ne doit jamais être tronqué
+                8192 // budget large : le "Brief complet" exhaustif ne doit jamais être tronqué
             );
             d.analyse_ia = result;
             d.analyse_ia_at = new Date().toISOString();
