@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS devis (
   statut           TEXT DEFAULT 'nouveau'
                      CHECK (statut IN ('nouveau', 'contacte', 'converti', 'archive')),
   analyse_ia       TEXT,                       -- compte rendu IA mis en cache (ne se régénère pas à chaque ouverture)
-  analyse_ia_at    TIMESTAMP WITH TIME ZONE     -- date de la dernière génération de l'analyse
+  analyse_ia_at    TIMESTAMP WITH TIME ZONE,    -- date de la dernière génération de l'analyse
+  pub_concept      JSONB,                       -- concept publicitaire IA mis en cache (adPrompt, texte, conversation affichée)
+  pub_concept_at   TIMESTAMP WITH TIME ZONE      -- date de la dernière génération du concept pub
 );
 
 CREATE INDEX IF NOT EXISTS devis_created_at_idx ON devis (created_at DESC);
@@ -33,12 +35,15 @@ CREATE INDEX IF NOT EXISTS devis_statut_idx     ON devis (statut);
 
 -- ------------------------------------------------------------
 --  Migration : si la table existe déjà (ancienne version),
---  ajoute les colonnes "quantité", "emplacements" et le cache d'analyse IA.
+--  ajoute les colonnes "quantité", "emplacements" et les caches IA
+--  (analyse + concept pub).
 -- ------------------------------------------------------------
-ALTER TABLE devis ADD COLUMN IF NOT EXISTS quantite      INTEGER DEFAULT 1;
-ALTER TABLE devis ADD COLUMN IF NOT EXISTS emplacements  JSONB;
-ALTER TABLE devis ADD COLUMN IF NOT EXISTS analyse_ia    TEXT;
-ALTER TABLE devis ADD COLUMN IF NOT EXISTS analyse_ia_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS quantite       INTEGER DEFAULT 1;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS emplacements   JSONB;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS analyse_ia     TEXT;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS analyse_ia_at  TIMESTAMP WITH TIME ZONE;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS pub_concept    JSONB;
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS pub_concept_at TIMESTAMP WITH TIME ZONE;
 
 -- ------------------------------------------------------------
 --  Row Level Security

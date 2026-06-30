@@ -190,19 +190,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ======================================================
     //  ÉTAPE 1 — VÉRIFICATION DU CODE
-    //  On vérifie en testant un dépôt ? Non : la vérification
-    //  réelle + l'écriture sont atomiques côté serveur (étape 3).
-    //  Ici on valide juste le format ; le code est confirmé au
-    //  moment de la publication par l'Edge Function.
+    //  On interroge l'Edge Function en mode "check" (lecture seule,
+    //  ne réclame pas le code) pour afficher immédiatement une erreur
+    //  si le code est invalide ou déjà utilisé — sans attendre la
+    //  saisie de l'avis. La réclamation définitive a toujours lieu à
+    //  la publication (étape 3), qui revérifie tout côté serveur.
     // ======================================================
-    function verifyCode() {
+    async function verifyCode() {
+        clearMsg(step1Msg);
         const code = codeInput.value.trim();
         if (!/^[0-9]{4}$/.test(code)) {
             showMsg(step1Msg, 'Veuillez saisir un code à 4 chiffres.', 'error');
             return;
         }
-        verifiedCode = code;
-        goToStep2();
+
+        verifyBtn.disabled = true;
+        const original = verifyBtn.textContent;
+        verifyBtn.textContent = 'Vérification…';
+
+        try {
+            const res = await fetch(`${FN_BASE}/submit-avis`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${SUPABASE_KEY}`,
+                    'apikey': SUPABASE_KEY
+                },
+                body: JSON.stringify({ code, check: true })
+            });
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                showMsg(step1Msg, data.error || 'Ce code est invalide.', 'error');
+                return;
+            }
+
+            verifiedCode = code;
+            goToStep2();
+        } catch (err) {
+            showMsg(step1Msg, 'Connexion impossible. Vérifiez votre réseau et réessayez.', 'error');
+            console.error(err);
+        } finally {
+            verifyBtn.disabled = false;
+            verifyBtn.textContent = original;
+        }
     }
 
     verifyBtn.addEventListener('click', verifyCode);

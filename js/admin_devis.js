@@ -424,6 +424,9 @@ Liste à puces EXHAUSTIVE de tout ce que le client a donné. Pour chaque sous-po
 - Logistique : budget, nombre de publicités, emplacement de chaque publicité, format (manuel/informatique), régularité d'entretien, dates de début et de fin
 - Autres précisions, contraintes, demandes spéciales ou remarques exprimées par le client
 
+## Design de la publicité
+Un paragraphe de synthèse (pas une simple liste) qui propose une direction artistique cohérente pour le visuel, basée UNIQUEMENT sur les éléments donnés par le client : palette de couleurs, style graphique, composition, ambiance/ton, éléments visuels à privilégier, traitement du texte/slogan. Si le brief créatif est trop pauvre pour dégager une direction précise, écris "Brief créatif insuffisant pour proposer une direction artistique précise — à clarifier au RDV (couleurs, style, visuels souhaités)." et liste ce qui manque pour pouvoir avancer.
+
 ## Déroulement de la conversation
 L'échange s'est-il bien passé ? Hésitations, confusion, mécontentement, blocages, incompréhensions, tentatives de fausses informations ou de manipulation du chatbot ? Points positifs (client motivé, réponses claires) ?
 
@@ -607,19 +610,22 @@ AD_PROMPT:
 TEXTE_PRINCIPAL:
 <le texte/slogan exact à superposer sur l'image, tel que validé par le client ; laisser vide si aucun texte n'est souhaité>`;
 
-    let pubHistory = [];
+    let pubHistory = [];      // [{role, content}] envoyé à l'IA (contexte technique complet)
+    let pubDisplayLog = [];   // [{role, text}] ce qui est réellement affiché (pour rejouer une conversation mise en cache)
+    let pubDevis = null;      // devis actuellement ouvert dans la modale Pub
     const pubChat = document.getElementById('pubChat');
     const pubInput = document.getElementById('pubInput');
     const pubSend = document.getElementById('pubSend');
     const pubInputRow = document.getElementById('pubInputRow');
     const pubGenZone = document.getElementById('pubGenZone');
 
-    function pubAddBubble(role, text) {
+    function pubAddBubble(role, text, record = true) {
         const b = document.createElement('div');
         b.className = `mini-bubble ${role}`;
         b.innerHTML = formatRich(text);
         pubChat.appendChild(b);
         pubChat.scrollTop = pubChat.scrollHeight;
+        if (record) pubDisplayLog.push({ role, text });
     }
 
     function pubSetEnabled(on) {
@@ -628,13 +634,27 @@ TEXTE_PRINCIPAL:
         if (on) pubInput.focus();
     }
 
-    async function openPubCreator(d) {
+    // Le concept (conversation + prompt final) est mis en cache (mémoire sur `d`
+    // + persisté en base) : rouvrir la modale n'appelle PLUS l'IA — il faut
+    // cliquer explicitement sur « Recommencer la conception » pour relancer.
+    async function openPubCreator(d, force = false) {
+        pubDevis = d;
         pubHistory = [];
+        pubDisplayLog = [];
         pubChat.innerHTML = '';
         pubGenZone.innerHTML = '';
         pubInputRow.style.display = 'flex';
         pubInput.value = '';
         openModal('pubModal');
+
+        if (d.pub_concept && !force) {
+            const cached = d.pub_concept;
+            const log = Array.isArray(cached.displayLog) ? cached.displayLog : [];
+            log.forEach(m => pubAddBubble(m.role, m.text, false));
+            pubInputRow.style.display = 'none';
+            showPromptResult(cached.adPrompt, cached.texte);
+            return;
+        }
 
         pubAddBubble('bot', "Très bien, affinons ensemble le visuel de cette publicité…");
         pubSetEnabled(false);
@@ -652,6 +672,17 @@ TEXTE_PRINCIPAL:
             pubAddBubble('bot', `⚠️ ${err.message}`);
             pubSetEnabled(true);
         }
+    }
+
+    // Sauvegarde best-effort du concept finalisé (mémoire + Supabase), pour que
+    // rouvrir la modale n'appelle plus l'IA tant que le devis n'a pas changé.
+    async function savePubConcept(d, adPrompt, texte) {
+        d.pub_concept = { adPrompt, texte, displayLog: pubDisplayLog.slice() };
+        d.pub_concept_at = new Date().toISOString();
+        const { error } = await supabase.from('devis')
+            .update({ pub_concept: d.pub_concept, pub_concept_at: d.pub_concept_at })
+            .eq('id', d.id);
+        if (error) console.error('Sauvegarde concept pub échouée', error);
     }
 
     async function pubSendMessage() {
@@ -698,6 +729,7 @@ TEXTE_PRINCIPAL:
             pubAddBubble('bot', "✅ Concept finalisé ! Voici le prompt prêt à coller dans une autre IA. Vous pouvez le modifier librement, ou générer l'image directement ici.");
             pubInputRow.style.display = 'none';
             showPromptResult(adPrompt, texte);
+            if (pubDevis) savePubConcept(pubDevis, adPrompt, texte);
         } else {
             pubAddBubble('bot', reply);
             pubSetEnabled(true);
@@ -781,6 +813,16 @@ TEXTE_PRINCIPAL:
         genBtn.textContent = "🖼️ Générer l'image ici";
         genBtn.addEventListener('click', () => generateVisual(ta.value.trim(), sloganInput.value.trim(), genBtn));
         actions.appendChild(genBtn);
+
+        // Le concept est mis en cache (voir openPubCreator) : ce bouton est le
+        // SEUL moyen de relancer une nouvelle conversation IA depuis ce concept.
+        if (pubDevis) {
+            const restartBtn = document.createElement('button');
+            restartBtn.className = 'btn btn-outline';
+            restartBtn.textContent = '🔄 Recommencer la conception';
+            restartBtn.addEventListener('click', () => openPubCreator(pubDevis, true));
+            actions.appendChild(restartBtn);
+        }
 
         box.appendChild(actions);
 
