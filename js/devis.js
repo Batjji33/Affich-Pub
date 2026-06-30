@@ -237,16 +237,15 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
     }
 
     // ======================================================
-    //  APPEL GEMINI (Edge Function "chat") + GESTION DU DÉBIT
+    //  APPEL IA (Edge Function "chat") + GESTION DU DÉBIT
     // ======================================================
-    // gemini-2.0-flash a été retiré par Google le 01/06/2026 (tout appel échoue
-    // désormais) — on utilise gemini-2.5-flash-lite, qui retrouve un palier
-    // gratuit aussi généreux que l'ancien 2.0-flash : 1M tokens/min et
-    // 15 requêtes/min (1500/jour). gemini-2.5-flash (non-lite) est bien plus
-    // serré (10 req/min, ~250/jour) : à éviter pour cet usage.
-    // → On envoie l'historique COMPLET (anti-oubli : le modèle garde tout le
-    //   contexte) et on TEMPORISE de façon proactive le débit de requêtes.
-    const GEMINI_MODEL = 'gemini-2.5-flash-lite';
+    // Le palier gratuit de Gemini est bridé à ~20 requêtes/JOUR pour ce
+    // compte/région → l'edge function "chat" route désormais sur PLUSIEURS
+    // fournisseurs gratuits (Cerebras → Groq → Gemini) avec bascule auto, et
+    // CHOISIT elle-même le modèle de chaque fournisseur. Le client n'a donc
+    // plus à envoyer de nom de modèle. On envoie le system prompt (= état
+    // complet) + les derniers échanges (cf. MAX_HISTORY_MESSAGES), et on
+    // TEMPORISE de façon proactive le débit de requêtes par visiteur.
 
     // Note d'attente affichée sous l'indicateur de frappe (ex. patientement 429).
     function setTypingNote(text) {
@@ -330,8 +329,19 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
         return `⏳ Beaucoup de demandes en ce moment… reprise dans ~${s}s`;
     }
 
+    // Nb de messages d'historique réellement envoyés à l'IA à chaque tour.
+    // On NE perd AUCUNE info en tronquant : l'état maître complet (`collected`,
+    // dont le champ `description` qui cumule tous les détails créatifs) est
+    // RÉ-INJECTÉ dans le system prompt à chaque appel (cf. describeStatus()).
+    // Les anciens tours bruts sont donc redondants — les garder ne ferait que
+    // gonfler les tokens et épuiser plus vite les quotas gratuits (Cerebras,
+    // Groq…). On conserve les derniers échanges pour le naturel conversationnel.
+    const MAX_HISTORY_MESSAGES = 14;
+
     // Un seul aller-retour réseau (sans retry).
     async function fetchChat() {
+        // On envoie le system prompt (= état complet) + la queue de l'historique.
+        const recent = history.slice(-MAX_HISTORY_MESSAGES);
         const res = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
             method: 'POST',
             headers: {
@@ -341,8 +351,7 @@ PROTOCOLE D'ÉTAT (obligatoire, à la fin de CHAQUE réponse, sur une nouvelle l
             },
             body: JSON.stringify({
                 system: buildSystemPrompt(),
-                messages: history,     // contexte COMPLET : le modèle n'oublie rien
-                model: GEMINI_MODEL
+                messages: recent
             })
         });
         const data = await res.json().catch(() => ({}));
