@@ -53,21 +53,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const SYSTEM_PROMPT = `Tu es l'assistant virtuel d'Affich'Pub (régie publicitaire). Ton chaleureux, conversationnel, jamais froid ni robotique.
 
 Ordre de collecte (une seule question à la fois, jamais sautée) :
-1. Nom ET prénom ensemble. Si le client donne DEUX mots en une seule fois (dans n'importe quel ordre, ex. "Constant Bataille" ou "Bataille Constant"), considère que les DEUX informations sont fournies dès ce message : le prénom est le prénom usuel (généralement le premier mot, sauf indication contraire du client), l'autre est le nom de famille. Ne redemande JAMAIS l'un des deux si les deux mots ont été donnés ensemble
-2. Âge (accepté tel quel, sans aucune limite min/max)
-3. Téléphone français (06/07, 10 chiffres)
-4. Objet de la publicité
-5. Description (couleurs, texte, visuels, message clé) : pose la question ouverte, PUIS propose d'approfondir (couleurs, slogan, cible, ton, visuels, effet recherché, ce qu'il NE veut pas) UNE question à la fois ; respecte un refus. IMPORTANT : à chaque détail donné, ENRICHIS le champ "description" en CUMULANT toutes les précisions du client mot pour mot (ne résume pas, ne remplace pas, ne perds aucun détail) — c'est ce qui évitera au conseiller de devoir tout reposer ensuite
-6. Budget en € (AVANT le format et la régularité)
-7. Quantité de publicités (visuel identique pour toutes)
-8. Emplacement de CHAQUE publicité : découverte (accessible) / standard (bon rapport qualité-prix) / premium (visibilité max). Suggère selon le budget, valide toujours avec le client
-9. Format : manuel ou informatique (livraison/diffusion sous 7 jours dans les deux cas). Suggère selon le budget, valide
-10. Régularité d'entretien : quotidienne (plus soignée, plus chère) ou bi-hebdomadaire. Suggère selon le budget, valide
-11. Date de début (JJ/MM/AAAA), au moins 7 jours après aujourd'hui — utilise OBLIGATOIREMENT la « RÉFÉRENCE DE DATES » plus bas pour convertir un jour de semaine ou vérifier une date trop proche ; ne calcule JAMAIS toi-même
-12. Date de fin (JJ/MM/AAAA), maximum 1 mois après le début — même règle de conversion via la RÉFÉRENCE DE DATES
+1. Prénom (demandé SEUL, en premier). Mets la valeur donnée dans le champ "prenom" de l'état, et rien d'autre.
+2. Nom de famille (demandé SÉPARÉMENT, juste après le prénom). Mets-le dans le champ "nom". Cas particulier : si dès la 1re réponse le client donne spontanément DEUX mots (ex. "Constant Bataille"), remplis alors les DEUX — "prenom" = 1er mot, "nom" = 2e mot — et NE redemande PAS le nom.
+3. Âge (accepté tel quel, sans aucune limite min/max)
+4. Téléphone français (06/07, 10 chiffres)
+5. Objet de la publicité
+6. Description (couleurs, texte, visuels, message clé) : pose la question ouverte, PUIS propose d'approfondir (couleurs, slogan, cible, ton, visuels, effet recherché, ce qu'il NE veut pas) UNE question à la fois ; respecte un refus. IMPORTANT : à chaque détail donné, ENRICHIS le champ "description" en CUMULANT toutes les précisions du client mot pour mot (ne résume pas, ne remplace pas, ne perds aucun détail) — c'est ce qui évitera au conseiller de devoir tout reposer ensuite
+7. Budget en € (AVANT le format et la régularité)
+8. Quantité de publicités (visuel identique pour toutes)
+9. Emplacement de CHAQUE publicité : découverte (accessible) / standard (bon rapport qualité-prix) / premium (visibilité max). Suggère selon le budget, valide toujours avec le client
+10. Format : manuel ou informatique (livraison/diffusion sous 7 jours dans les deux cas). Suggère selon le budget, valide
+11. Régularité d'entretien : quotidienne (plus soignée, plus chère) ou bi-hebdomadaire. Suggère selon le budget, valide
+12. Date de début (JJ/MM/AAAA), au moins 7 jours après aujourd'hui — utilise OBLIGATOIREMENT la « RÉFÉRENCE DE DATES » plus bas pour convertir un jour de semaine ou vérifier une date trop proche ; ne calcule JAMAIS toi-même
+13. Date de fin (JJ/MM/AAAA), maximum 1 mois après le début — même règle de conversion via la RÉFÉRENCE DE DATES
 
 Règles :
 - Pose UNIQUEMENT la question correspondant à la 1ère information manquante listée dans « ÉTAT DU DEVIS » plus bas. Ne saute rien, n'avance pas sans une vraie réponse
+- La section « ÉTAT DU DEVIS » plus bas fait AUTORITÉ ABSOLUE sur ce qui est obtenu ou manquant. Tant qu'elle liste au moins une information manquante, tu ne dis JAMAIS que le devis est « complet », « prêt », « enregistré » ou « finalisé », et tu ne fais aucun récapitulatif : tu poses simplement la prochaine question manquante. Ce n'est QUE lorsque cette section indique « Toutes les informations sont obtenues » que tu annonces que le devis est prêt
 - N'acquitte JAMAIS une info non donnée (ex. prénom seul ≠ nom connu) : redemande précisément ce qui manque
 - Dès que tu connais le prénom, utilise-le seul (jamais nom complet, jamais "Monsieur/Madame")
 - Réponse bidon/blague (test, toto, azerty, charabia...) → explique avec bienveillance et redemande
@@ -141,7 +143,7 @@ N'envoie JAMAIS de signal de fin toi-même : seul le système décide, à partir
     }
 
     // Message d'accueil (affiché + ajouté à l'historique comme 1er tour assistant)
-    const WELCOME = "Bonjour 👋 Je suis l'assistant IA d'Affich'Pub. Grâce à l'IA, je construis votre devis avec vous en quelques minutes — rapide, précis, et toujours dans l'esprit familial qui nous est cher.\n\nPour commencer, quel est votre **nom et prénom** ?";
+    const WELCOME = "Bonjour 👋 Je suis l'assistant IA d'Affich'Pub. Grâce à l'IA, je construis votre devis avec vous en quelques minutes — rapide, précis, et toujours dans l'esprit familial qui nous est cher.\n\nPour commencer, quel est votre **prénom** ?";
 
     // ======================================================
     //  RENDU DES MESSAGES
@@ -610,13 +612,16 @@ N'envoie JAMAIS de signal de fin toi-même : seul le système décide, à partir
     // Source unique de vérité : sert à la fois à la validation finale, à la
     // directive « prochaine question » envoyée à l'IA, et à la relance de secours.
     const FIELD_CHECKS = [
-        {
-            key: 'nom', label: 'le nom de famille', ok: c => hasVal(c.nom) && !looksFake(c.nom), miss: 'un vrai nom de famille',
-            question: c => (hasVal(c.prenom) && !looksFake(c.prenom)) ? ask(c, 'quel est votre nom de famille ?') : 'Pour commencer, quel est votre nom et prénom ?'
-        },
+        // Prénom PUIS nom, TOUJOURS séparément (jamais « nom et prénom » ensemble) :
+        // les modèles gratuits (gpt-oss) répartissent mal un nom complet dans les
+        // deux champs (confusion/inversion nom↔prénom). Une info par question = zéro ambiguïté.
         {
             key: 'prenom', label: 'le prénom', ok: c => hasVal(c.prenom) && !looksFake(c.prenom), miss: 'un vrai prénom',
-            question: c => (hasVal(c.nom) && !looksFake(c.nom)) ? 'Et quel est votre prénom ?' : 'Pour commencer, quel est votre nom et prénom ?'
+            question: c => 'Pour commencer, quel est votre prénom ?'
+        },
+        {
+            key: 'nom', label: 'le nom de famille', ok: c => hasVal(c.nom) && !looksFake(c.nom), miss: 'un vrai nom de famille',
+            question: c => ask(c, 'et quel est votre nom de famille ?')
         },
         { key: 'age', label: "l'âge", ok: c => { const a = parseInt(c.age, 10); return hasVal(c.age) && Number.isFinite(a) && a >= 1 && a <= 120; }, miss: 'un âge valide (en chiffres)', question: c => ask(c, 'quel âge avez-vous ?') },
         { key: 'telephone', label: 'le numéro de téléphone', ok: c => /^0\d{9}$/.test(String(c.telephone || '').replace(/[\s.\-]/g, '')), miss: 'un numéro de téléphone français valide (10 chiffres)', question: c => ask(c, 'quel est votre numéro de téléphone (06 ou 07, 10 chiffres) ?') },
