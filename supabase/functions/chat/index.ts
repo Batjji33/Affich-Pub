@@ -48,10 +48,23 @@ interface Provider {
   buildPayload: (
     messages: unknown[],
     maxTokens: number,
+    responseFormat: unknown,
   ) => Record<string, unknown>;
 }
 
 const TEMPERATURE = 0.5;
+
+// Ajoute response_format au payload seulement si l'appelant en fournit un.
+// Le chatbot devis demande { type: "json_object" } (réponse en JSON strict,
+// bien plus fiable qu'un bloc JSON écrit à la main en fin de prose par un
+// modèle faible) ; l'admin ne l'envoie pas → réponses en texte libre.
+function withFormat(
+  payload: Record<string, unknown>,
+  responseFormat: unknown,
+): Record<string, unknown> {
+  if (responseFormat) payload.response_format = responseFormat;
+  return payload;
+}
 
 function buildProviders(): Provider[] {
   return [
@@ -68,13 +81,13 @@ function buildProviders(): Provider[] {
       name: "cerebras",
       url: "https://api.cerebras.ai/v1/chat/completions",
       apiKey: Deno.env.get("CEREBRAS_API_KEY"),
-      buildPayload: (messages, maxTokens) => ({
+      buildPayload: (messages, maxTokens, responseFormat) => withFormat({
         model: "gpt-oss-120b",
         messages,
         temperature: TEMPERATURE,
         max_completion_tokens: Math.min(maxTokens, 4096),
         reasoning_effort: "low",
-      }),
+      }, responseFormat),
     },
     // 2) Groq — rapide, 1 000 req/jour. Même mitigation de fuite de raisonnement
     //    que Cerebras (même famille de modèle gpt-oss-120b).
@@ -82,13 +95,13 @@ function buildProviders(): Provider[] {
       name: "groq",
       url: "https://api.groq.com/openai/v1/chat/completions",
       apiKey: Deno.env.get("GROQ_API_KEY"),
-      buildPayload: (messages, maxTokens) => ({
+      buildPayload: (messages, maxTokens, responseFormat) => withFormat({
         model: "openai/gpt-oss-120b",
         messages,
         temperature: TEMPERATURE,
         max_tokens: maxTokens,
         reasoning_effort: "low",
-      }),
+      }, responseFormat),
     },
     // 3) Gemini — dernier recours (~20 req/jour). Les modèles 2.5+ font du
     //    « thinking » interne qui grignote le budget max_tokens AVANT la
@@ -97,13 +110,13 @@ function buildProviders(): Provider[] {
       name: "gemini",
       url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       apiKey: Deno.env.get("GEMINI_API_KEY"),
-      buildPayload: (messages, maxTokens) => ({
+      buildPayload: (messages, maxTokens, responseFormat) => withFormat({
         model: "gemini-2.5-flash-lite",
         messages,
         temperature: TEMPERATURE,
         max_tokens: maxTokens,
         reasoning_effort: "none",
-      }),
+      }, responseFormat),
     },
   ];
 }
@@ -128,7 +141,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { messages = [], system, max_tokens } = await req.json();
+    const { messages = [], system, max_tokens, response_format } = await req.json();
 
     // Le prompt système est passé en 1er message role:"system" (supporté par
     // les endpoints OpenAI-compatible de tous nos fournisseurs).
@@ -170,7 +183,9 @@ Deno.serve(async (req) => {
             Authorization: `Bearer ${p.apiKey}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(p.buildPayload(finalMessages, maxTokens)),
+          body: JSON.stringify(
+            p.buildPayload(finalMessages, maxTokens, response_format),
+          ),
         });
 
         // Lecture en TEXTE d'abord : un fournisseur peut renvoyer une erreur
