@@ -175,60 +175,81 @@ Deno.serve(async (req) => {
     let lastRetryAfter: string | null = null;
     let truncatedFallback: { rawText: string; status: number; provider: string } | null = null;
 
-    for (const p of providers) {
-      try {
-        const resp = await fetch(p.url, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${p.apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(
-            p.buildPayload(finalMessages, maxTokens, response_format),
-          ),
-        });
+    // Un fournisseur peut ne pas supporter response_format (400 "unsupported
+    // field"/schéma invalide) sans que ce soit documenté de façon fiable pour
+    // gpt-oss-120b (Cerebras/Groq) — plutôt que de deviner, on RETENTE UNE FOIS
+    // le même fournisseur sans response_format sur un 400 avant d'abandonner
+    // ce fournisseur. Sur 401/403/429/5xx (auth/quota/serveur), retenter sans
+    // le paramètre ne changerait rien : on bascule direct sur le suivant.
+    providerLoop: for (const p of providers) {
+      let useFormat = response_format;
+      let formatRetried = false;
 
-        // Lecture en TEXTE d'abord : un fournisseur peut renvoyer une erreur
-        // non-JSON (HTML, corps vide…) sur certains 4xx/5xx.
-        const rawText = await resp.text();
-        let data: unknown = null;
+      retry: for (;;) {
         try {
-          data = rawText ? JSON.parse(rawText) : {};
-        } catch {
-          data = null;
-        }
+          const resp = await fetch(p.url, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${p.apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(
+              p.buildPayload(finalMessages, maxTokens, useFormat),
+            ),
+          });
 
-        if (resp.ok) {
-          const choice = (data as { choices?: { finish_reason?: string }[] })
-            ?.choices?.[0];
-          if (choice?.finish_reason === "length") {
-            // Réponse coupée (contexte/quota de sortie trop court pour ce
-            // fournisseur) : on garde comme filet de secours et on essaie
-            // le suivant, qui a peut-être plus de marge.
-            console.error(`[${p.name}] réponse tronquée (finish_reason=length)`);
-            if (!truncatedFallback) {
-              truncatedFallback = { rawText, status: resp.status, provider: p.name };
-            }
-            continue;
+          // Lecture en TEXTE d'abord : un fournisseur peut renvoyer une erreur
+          // non-JSON (HTML, corps vide…) sur certains 4xx/5xx.
+          const rawText = await resp.text();
+          let data: unknown = null;
+          try {
+            data = rawText ? JSON.parse(rawText) : {};
+          } catch {
+            data = null;
           }
-          // Succès complet : on propage la réponse telle quelle (format OpenAI).
-          const headers = { ...baseHeaders };
-          headers["X-AI-Provider"] = p.name; // utile pour diagnostiquer côté réseau
-          return new Response(rawText, { status: resp.status, headers });
-        }
 
-        // Échec : on mémorise et on tente le fournisseur suivant.
-        lastStatus = resp.status;
-        lastError = readError(data, rawText, resp.status);
-        lastRetryAfter = resp.headers.get("retry-after");
-        console.error(
-          `[${p.name}] ${resp.status} ${resp.statusText} — ${lastError}`,
-        );
-      } catch (err) {
-        // Erreur réseau / exception : on tente le suivant.
-        lastStatus = 502;
-        lastError = (err as Error).message;
-        console.error(`[${p.name}] exception — ${lastError}`);
+          if (resp.ok) {
+            const choice = (data as { choices?: { finish_reason?: string }[] })
+              ?.choices?.[0];
+            if (choice?.finish_reason === "length") {
+              // Réponse coupée (contexte/quota de sortie trop court pour ce
+              // fournisseur) : on garde comme filet de secours et on essaie
+              // le fournisseur suivant, qui a peut-être plus de marge.
+              console.error(`[${p.name}] réponse tronquée (finish_reason=length)`);
+              if (!truncatedFallback) {
+                truncatedFallback = { rawText, status: resp.status, provider: p.name };
+              }
+              continue providerLoop;
+            }
+            // Succès complet : on propage la réponse telle quelle (format OpenAI).
+            const headers = { ...baseHeaders };
+            headers["X-AI-Provider"] = p.name; // utile pour diagnostiquer côté réseau
+            return new Response(rawText, { status: resp.status, headers });
+          }
+
+          lastStatus = resp.status;
+          lastError = readError(data, rawText, resp.status);
+          lastRetryAfter = resp.headers.get("retry-after");
+          console.error(
+            `[${p.name}] ${resp.status} ${resp.statusText} — ${lastError}`,
+          );
+
+          // 400 + response_format demandé + pas encore retenté sur CE fournisseur
+          // → on retire le paramètre et on retente une fois avant d'abandonner.
+          if (resp.status === 400 && useFormat && !formatRetried) {
+            console.error(`[${p.name}] retente sans response_format (400)`);
+            useFormat = undefined;
+            formatRetried = true;
+            continue retry;
+          }
+          continue providerLoop;
+        } catch (err) {
+          // Erreur réseau / exception : on tente le fournisseur suivant.
+          lastStatus = 502;
+          lastError = (err as Error).message;
+          console.error(`[${p.name}] exception — ${lastError}`);
+          continue providerLoop;
+        }
       }
     }
 
