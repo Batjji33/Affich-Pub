@@ -88,7 +88,10 @@ Tu ne réponds JAMAIS en texte libre. CHAQUE réponse est UNIQUEMENT un objet JS
 - "message" : ta réponse visible au client (la question à poser, ta relance…). N'y mets JAMAIS de JSON ni de détail technique.
 - "etat" : la MÉMOIRE du devis. Reporte-y TOUTES les informations connues depuis le DÉBUT de la conversation (état CUMULATIF), pas seulement la dernière. Ne remets JAMAIS à "" un champ déjà rempli auparavant. C'est cet objet qui sert de mémoire au système ; s'il est vide ou incomplet, le système croit que le client n'a rien donné et te fait reposer les questions.
 - Laisse "" (ou [] pour emplacements) UNIQUEMENT les champs réellement pas encore obtenus.
-- format: manuel/informatique. regularite: quotidienne/bihebdomadaire. emplacements: un decouverte/standard/premium par publicité. Dates en JJ/MM/AAAA.
+- VALEURS CANONIQUES dans "etat" (le système les analyse par programme — une valeur mal formée = information perdue = question reposée) :
+  • dateDebut / dateFin : TOUJOURS une date résolue au format JJ/MM/AAAA (ex. "08/08/2026"). JAMAIS une phrase ("le plus tard possible"), JAMAIS un jour de semaine ("mercredi"), JAMAIS un mois en lettres. Si le client répond de façon relative (ex. "le plus tard possible", "dans deux semaines"), TU résous la date via la RÉFÉRENCE DE DATES et tu écris la date chiffrée obtenue.
+  • age : nombre seul (ex. "30"). telephone : 10 chiffres collés (ex. "0612345678"). budget : montant en chiffres (ex. "150"). quantite : nombre seul.
+  • format: "manuel" ou "informatique". regularite: "quotidienne" ou "bihebdomadaire". emplacements: un "decouverte"/"standard"/"premium" par publicité.
 
 Exemple valide — le client « Constant Bataille » a donné son numéro et veut promouvoir la F1 :
 {"message":"Merci Constant ! Quel âge avez-vous ?","etat":{"nom":"Bataille","prenom":"Constant","age":"","telephone":"0612345678","objet":"la F1","description":"","budget":"","quantite":"","emplacements":[],"format":"","regularite":"","dateDebut":"","dateFin":""}}
@@ -826,10 +829,28 @@ N'envoie JAMAIS de signal de fin toi-même : seul le système décide, à partir
         empls.forEach(e => { counts[e] = (counts[e] || 0) + 1; });
         return Object.keys(counts).map(k => `${counts[k]} ${labels[k] || k}`).join(' · ');
     }
+    const MOIS_FR = {
+        janvier: 1, fevrier: 2, 'février': 2, mars: 3, avril: 4, mai: 5, juin: 6,
+        juillet: 7, aout: 8, 'août': 8, septembre: 9, octobre: 10,
+        novembre: 11, decembre: 12, 'décembre': 12
+    };
+    // Analyse TOLÉRANTE d'une date écrite par l'IA (ou le client) : le modèle
+    // ne respecte pas toujours le format JJ/MM/AAAA demandé. On accepte, dans
+    // n'importe quel texte : JJ/MM/AAAA (séparateurs / . ou -), l'ISO
+    // AAAA-MM-JJ, et le format textuel « 8 août 2026 ». Renvoie un Date ou null.
     function parseFRDate(str) {
-        const m = (str || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-        if (!m) return null;
-        return new Date(+m[3], +m[2] - 1, +m[1]);
+        const s = String(str || '').trim();
+        if (!s) return null;
+        // 1) JJ/MM/AAAA (séparateurs / . -), n'importe où dans le texte.
+        let m = s.match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/);
+        if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+        // 2) ISO AAAA-MM-JJ.
+        m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+        // 3) « 8 août 2026 » (nom de mois français, avec ou sans accent).
+        m = s.toLowerCase().match(/(\d{1,2})\s+([a-zàâäéèêëïîôöùûüç]+)\.?\s+(\d{4})/);
+        if (m && MOIS_FR[m[2]]) return new Date(+m[3], MOIS_FR[m[2]] - 1, +m[1]);
+        return null;
     }
     function toISODate(d) {
         if (!d || isNaN(d)) return null;
