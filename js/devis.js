@@ -884,12 +884,14 @@ N'envoie JAMAIS de signal de fin toi-même : seul le système décide, à partir
     }
 
     function computeEstimate(d) {
-        // Tarifs calibrés pour un montant moyen ~150-200 € et un plafond strict à 500 €.
-        const basePPW = { decouverte: 30, standard: 50, premium: 85 }; // € par publicité et par semaine
-        const formatMult = { manuel: 1.0, informatique: 1.25 };        // l'informatique coûte plus cher
-        const regMult = { quotidienne: 1.4, bihebdomadaire: 1.0 };     // le quotidien coûte plus cher
-        const PRIX_MIN = 50;
-        const PRIX_MAX = 500;
+        // Tarifs calibrés pour un montant courant ~80-200 €, dépassant rarement 250 €,
+        // avec un plafond strict à 400 € (uniquement pour les commandes cumulant
+        // beaucoup de publicités premium + informatique + quotidienne + longue durée).
+        const basePPW = { decouverte: 15, standard: 24, premium: 38 }; // € par publicité et par semaine
+        const formatMult = { manuel: 1.0, informatique: 1.1 };          // l'informatique coûte plus cher
+        const regMult = { quotidienne: 1.2, bihebdomadaire: 1.0 };     // le quotidien coûte plus cher
+        const PRIX_MIN = 40;
+        const PRIX_MAX = 400;
 
         const format = normFormat(d.format);
         const regularite = normRegularite(d.regularite);
